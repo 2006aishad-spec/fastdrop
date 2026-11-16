@@ -57,3 +57,9 @@ FastDrop é uma aplicação Android offline-first para enviar ficheiros grandes 
 ## Limites conscientes desta primeira entrega
 
 A descoberta real de dispositivos, picker nativo de ficheiros, streaming P2P, checksum e cliente Windows ainda não são executados pelo protótipo visual. O desenho já expõe esses estados e a arquitetura deve receber essas implementações sem alterar o fluxo principal.
+
+## Fase Windows — cliente de receção leve
+
+O cliente Windows fica em `windows-client/` e usa C# WinForms com bibliotecas nativas .NET, sem Electron e sem dependências de terceiros. A escolha privilegia baixo consumo de memória, arranque rápido e compatibilidade com Windows 10 Home. O projeto é publicado como executável autónomo x64 ou x86.
+
+A primeira fatia funcional do cliente é a janela de espera: identidade FastDrop, anúncio UDP multicast FD/01, estado de PC pronto e escolha da pasta de destino. As classes de protocolo, sessão, chunks por offset e SHA-256 já estão separadas para receber o listener HTTP local e o handshake visual na próxima iteração. O ambiente atual é Linux e não possui .NET SDK; por isso a compilação final deve ser executada num PC Windows com o script `windows-client/build.ps1`.

@@ -24,3 +24,13 @@
 - [x] Os ecrãs de Dashboard, Histórico e Definições funcionam no Expo Web Preview e mantêm navegação compatível com React Native.
 - [x] Os diagnósticos TypeScript e o lint passam sem erros introduzidos pelo FastDrop.
 - [x] Os ativos de branding nativo foram atualizados para a identidade FastDrop antes do checkpoint.
+
+## Cliente Windows leve — primeira fatia
+
+- [x] Existe um projeto C# WinForms sem dependências de terceiros, direcionado ao Windows 10 e preparado para publicação autónoma x64/x86.
+- [x] O cliente anuncia o PC na rede local com a versão e porta do protocolo FD/01 e apresenta um estado claro de espera.
+- [x] O utilizador pode escolher a pasta onde os ficheiros recebidos serão guardados.
+- [x] A camada de sessão grava manifestos, escreve chunks por offset e verifica SHA-256 sem carregar o ficheiro inteiro em memória.
+- [ ] Ligar o listener HTTP local na porta FD/01 e o emparelhamento com confirmação visual de seis caracteres.
+- [ ] Ligar o envio real do Android ao manifesto, chunks, retomada e confirmação de integridade do cliente Windows.
+- [ ] Compilar e testar o executável publicado num PC Windows 10 Home x64 e validar o comportamento numa máquina com 2 GB de RAM.
