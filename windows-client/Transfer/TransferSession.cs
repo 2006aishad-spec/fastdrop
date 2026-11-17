@@ -65,8 +65,11 @@ public sealed class TransferSession
         if (!string.Equals(entry.Sha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Checksum final não corresponde ao manifesto.");
         var part = GetPartPath(entry);
         if (!File.Exists(part) || new FileInfo(part).Length != entry.Size) throw new InvalidDataException("O ficheiro incompleto não pode ser finalizado.");
-        await using var stream = File.OpenRead(part);
-        var actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        string actual;
+        await using (var stream = File.OpenRead(part))
+        {
+            actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        }
         if (!CryptographicOperations.FixedTimeEquals(actualChunku8(actual), actualChunku8(expectedSha256))) throw new InvalidDataException("SHA-256 final divergente.");
         var finalPath = _store.GetFinalPath(SessionFolder, entry);
         File.Move(part, finalPath);
