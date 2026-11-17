@@ -341,7 +341,7 @@ class XTransferTransportModule : Module() {
         if (offset < 0L || offset > document.size) throw IllegalStateException("Offset de retoma fora dos limites do ficheiro.")
 
         context.contentResolver.openInputStream(document.uri).use { stream ->
-          if (stream == null) throw IllegalStateException("Não foi possível abrir \${document.name}.")
+          if (stream == null) throw IllegalStateException("Não foi possível abrir o ficheiro.")
           skipExactly(stream, offset)
           while (offset < document.size) {
             checkAction(control, output, input, sessionId, transferId)
@@ -368,7 +368,7 @@ class XTransferTransportModule : Module() {
         writeMessage(output, "FILE_END", JSONObject().put("fileId", fileId).put("sha256", fileHash))
         val complete = readMessage(input)
         if (complete.first != "FILE_COMPLETE" || complete.second.optString("fileId") != fileId) {
-          throw IllegalStateException("O Windows não confirmou a integridade final de \${document.name}.")
+          throw IllegalStateException("O Windows não confirmou a integridade final de o ficheiro.")
         }
         totalAcknowledged += document.size
         sendProgress("file-complete", transferId, totalAcknowledged, totalBytes, document.name, "SHA-256 confirmado pelo Windows.")
@@ -407,7 +407,7 @@ class XTransferTransportModule : Module() {
     val digest = MessageDigest.getInstance("SHA-256")
     var total = 0L
     context.contentResolver.openInputStream(document.uri).use { stream ->
-      if (stream == null) throw IllegalStateException("Não foi possível abrir \${document.name}.")
+      if (stream == null) throw IllegalStateException("Não foi possível abrir o ficheiro.")
       val buffer = ByteArray(64 * 1024)
       while (true) {
         checkAction(control)
@@ -415,11 +415,11 @@ class XTransferTransportModule : Module() {
         if (read < 0) break
         if (read == 0) continue
         total += read
-        if (total > document.size) throw IllegalStateException("\${document.name} mudou de tamanho durante a leitura.")
+        if (total > document.size) throw IllegalStateException("o ficheiro mudou de tamanho durante a leitura.")
         digest.update(buffer, 0, read)
       }
     }
-    if (total != document.size) throw IllegalStateException("O tamanho de \${document.name} mudou; seleciona o ficheiro novamente.")
+    if (total != document.size) throw IllegalStateException("O tamanho de o ficheiro mudou; seleciona o ficheiro novamente.")
     return digest.digest().joinToString("") { "%02x".format(it) }
   }
 
