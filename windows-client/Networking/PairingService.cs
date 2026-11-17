@@ -12,6 +12,7 @@ public sealed class PairingService
     private readonly Dictionary<string, (int Failures, DateTimeOffset BlockedUntil)> _failures = new();
     private PairingTicket? _ticket;
     private bool _consumed;
+    private bool _pairIssued;
 
     public string CurrentCode
     {
@@ -32,6 +33,7 @@ public sealed class PairingService
             _ticket = new PairingTicket(deviceId, sessionId, token, DateTimeOffset.UtcNow + _ticketLifetime);
             _ticket = _ticket with { TokenCode = CreateCode() };
             _consumed = false;
+            _pairIssued = false;
             _failures.Clear();
         }
     }
@@ -44,6 +46,12 @@ public sealed class PairingService
             if (_ticket is null || DateTimeOffset.UtcNow >= _ticket.ExpiresAt)
             {
                 response = response with { Message = "O código de emparelhamento expirou." };
+                return false;
+            }
+
+            if (_pairIssued)
+            {
+                response = response with { Message = "Este código já foi utilizado. Gera um novo código." };
                 return false;
             }
 
@@ -73,6 +81,7 @@ public sealed class PairingService
             }
 
             _ticket = _ticket with { DeviceId = request.DeviceId };
+            _pairIssued = true;
             response = new PairResponse(true, _ticket.SessionId, _ticket.TokenCode, "Emparelhamento aceite.", _ticket.Token);
             return true;
         }
