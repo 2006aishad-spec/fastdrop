@@ -368,12 +368,11 @@ class XTransferTransportModule : Module() {
         writeMessage(output, "FILE_END", JSONObject().put("fileId", fileId).put("sha256", fileHash))
         val complete = readMessage(input)
         if (complete.first != "FILE_COMPLETE" || complete.second.optString("fileId") != fileId) {
-          throw IllegalStateException("O Windows não confirmou a integridade final de o ficheiro.")
+          throw IllegalStateException("O Windows não confirmou a integridade final do ficheiro.")
         }
         totalAcknowledged += document.size
         sendProgress("file-complete", transferId, totalAcknowledged, totalBytes, document.name, "SHA-256 confirmado pelo Windows.")
       }
-      checkAction(control, output, input, sessionId, transferId)
       sendProgress("completed", transferId, totalBytes, totalBytes, "", "Todos os ficheiros foram recebidos e verificados.")
     }
     return mapOf("status" to "completed", "transferId" to transferId, "fileCount" to documents.size, "totalBytes" to totalBytes)
@@ -415,7 +414,7 @@ class XTransferTransportModule : Module() {
         if (read < 0) break
         if (read == 0) continue
         total += read
-        if (total > document.size) throw IllegalStateException("o ficheiro mudou de tamanho durante a leitura.")
+        if (total > document.size) throw IllegalStateException("O ficheiro mudou de tamanho durante a leitura.")
         digest.update(buffer, 0, read)
       }
     }
