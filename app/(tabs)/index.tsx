@@ -1,5 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -9,12 +9,7 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import {
-  currentTransfer,
-  nearbyDevices,
-  type FileKind,
-  type TransferFile,
-} from "@/lib/transfer-model";
+import { scanForWindowsDevices, type DiscoveredWindowsDevice } from "@/modules/xtransfer-transport/src";
 
 const palette = {
   ink: "#182018",
@@ -27,51 +22,6 @@ const palette = {
   blue: "#CFE8FF",
   amber: "#F7D99A",
 };
-
-const kindIcon: Record<FileKind, keyof typeof MaterialIcons.glyphMap> = {
-  photo: "image",
-  video: "movie",
-  document: "description",
-  archive: "folder-zip",
-  app: "android",
-};
-
-const kindLabel: Record<FileKind, string> = {
-  photo: "Imagem",
-  video: "Vídeo",
-  document: "Documento",
-  archive: "Arquivo",
-  app: "Aplicação",
-};
-
-function formatPercent(value: number) {
-  return `${Math.round(value * 100)}%`;
-}
-
-function FileRow({ file, selected, onPress }: { file: TransferFile; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fileRow, pressed && styles.pressed]}>
-      <View style={[styles.fileIcon, { backgroundColor: file.state === "completed" ? palette.lime : palette.faint }]}>
-        <MaterialIcons name={kindIcon[file.kind]} size={19} color={palette.ink} />
-      </View>
-      <View style={styles.fileCopy}>
-        <Text numberOfLines={1} style={styles.fileName}>{file.name}</Text>
-        <Text style={styles.fileMeta}>{kindLabel[file.kind]} · {file.size}</Text>
-      </View>
-      <View style={styles.fileRight}>
-        {file.state === "completed" ? (
-          <MaterialIcons name="check-circle" size={21} color={palette.limeDark} />
-        ) : file.state === "transferring" ? (
-          <Text style={styles.filePercent}>{formatPercent(file.progress)}</Text>
-        ) : (
-          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-            {selected ? <MaterialIcons name="check" size={14} color={palette.ink} /> : null}
-          </View>
-        )}
-      </View>
-    </Pressable>
-  );
-}
 
 function SectionLabel({ eyebrow, title, action }: { eyebrow: string; title: string; action?: string }) {
   return (
@@ -87,17 +37,26 @@ function SectionLabel({ eyebrow, title, action }: { eyebrow: string; title: stri
 
 export default function HomeScreen() {
   const [isScanning, setIsScanning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<string[]>(["photo-4"]);
-  const [showAllFiles, setShowAllFiles] = useState(false);
+  const [devices, setDevices] = useState<DiscoveredWindowsDevice[]>([]);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const device = devices[0] ?? null;
 
-  const device = nearbyDevices[0];
-  const visibleFiles = showAllFiles ? currentTransfer.files : currentTransfer.files.slice(0, 3);
-  const activeProgress = isPaused ? 0.68 : 0.68;
+  const scanForDevices = useCallback(async () => {
+    setIsScanning(true);
+    setScanError(null);
+    try {
+      setDevices(await scanForWindowsDevices(5000));
+    } catch (error) {
+      setDevices([]);
+      setScanError(error instanceof Error ? error.message : "Não foi possível procurar PCs.");
+    } finally {
+      setIsScanning(false);
+    }
+  }, []);
 
-  const toggleFile = (id: string) => {
-    setSelectedFiles((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  };
+  useEffect(() => {
+    void scanForDevices();
+  }, [scanForDevices]);
 
   return (
     <ScreenContainer containerClassName="bg-[#F9FAF5]" safeAreaClassName="bg-[#F9FAF5]" edges={["top", "left", "right"]}>
@@ -136,67 +95,51 @@ export default function HomeScreen() {
               <View style={styles.deviceSignal}><View style={styles.signalLine} /><View style={styles.signalLineShort} /></View>
             </View>
             <View style={styles.deviceCopy}>
-              <Text style={styles.deviceName}>{device.name}</Text>
-              <Text style={styles.deviceMeta}>{device.model} · {device.latency}</Text>
-              <Text style={styles.deviceCode}>{device.address}</Text>
+              <Text style={styles.deviceName}>{device?.name ?? (isScanning ? "A procurar computadores…" : "Nenhum PC encontrado")}</Text>
+              <Text style={styles.deviceMeta}>{device ? "Windows · FD/01" : "Liga o PC à mesma rede Wi-Fi ou hotspot."}</Text>
+              <Text style={styles.deviceCode}>{device ? `${device.ipAddress}:${device.transferPort}` : (scanError ?? "A descoberta usa apenas a rede local.")}</Text>
             </View>
-            <View style={styles.deviceCheck}>
-              <MaterialIcons name="verified-user" size={19} color={palette.limeDark} />
-            </View>
+            {device ? <View style={styles.deviceCheck}><MaterialIcons name="desktop-windows" size={19} color={palette.limeDark} /></View> : null}
           </View>
           <View style={styles.deviceFooter}>
             <View style={styles.connectedRow}>
-              <View style={styles.connectedDot} />
-              <Text style={styles.connectedText}>Pronto para receber</Text>
+              <View style={[styles.connectedDot, !device && { backgroundColor: palette.amber }]} />
+              <Text style={styles.connectedText}>{device ? "PC encontrado na rede local" : (isScanning ? "A procurar na rede local" : "À espera de um PC compatível")}</Text>
             </View>
-            <Pressable onPress={() => { setIsScanning(true); setTimeout(() => setIsScanning(false), 800); }}>
+            <Pressable onPress={() => { void scanForDevices(); }} disabled={isScanning}>
               <Text style={styles.scanButton}>{isScanning ? "A procurar…" : "Procurar de novo"}</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={styles.sectionGap}>
-          <SectionLabel eyebrow="02 / FILA" title="O que vais enviar" action={`${currentTransfer.totalFiles} FICHEIROS`} />
+          <SectionLabel eyebrow="02 / SELEÇÃO" title="Preparar ficheiros" action="A SEGUIR" />
           <View style={styles.fileCard}>
-            {visibleFiles.map((file) => (
-              <FileRow key={file.id} file={file} selected={selectedFiles.includes(file.id)} onPress={() => toggleFile(file.id)} />
-            ))}
-            <Pressable onPress={() => setShowAllFiles((current) => !current)} style={styles.moreFiles}>
-              <MaterialIcons name={showAllFiles ? "expand-less" : "add-circle-outline"} size={18} color={palette.limeDark} />
-              <Text style={styles.moreFilesText}>{showAllFiles ? "Mostrar menos" : "Adicionar ficheiros"}</Text>
-              <Text style={styles.moreFilesHint}>Imagens · vídeos · ZIP · Excel</Text>
-            </Pressable>
+            <View style={{ paddingVertical: 18, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <MaterialIcons name="folder-open" size={22} color={palette.limeDark} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.moreFilesText}>Seletor de ficheiros ainda não ligado</Text>
+                <Text style={styles.fileMeta}>A seleção real será ativada na próxima etapa da integração.</Text>
+              </View>
+            </View>
           </View>
         </View>
 
         <View style={styles.sectionGap}>
-          <SectionLabel eyebrow="03 / EM CURSO" title="A enviar agora" action={isPaused ? "PAUSADO" : "A ENVIAR"} />
+          <SectionLabel eyebrow="03 / TRANSPORTE" title="Envio de ficheiros" action="EM INTEGRAÇÃO" />
           <View style={styles.transferCard}>
-            <View style={styles.transferTop}>
-              <View style={styles.transferHeadline}>
-                <Text style={styles.transferTarget}>{currentTransfer.target}</Text>
-                <Text style={styles.transferStats}>{currentTransfer.completedFiles} de {currentTransfer.totalFiles} ficheiros · {currentTransfer.totalSize}</Text>
-              </View>
-              <Text style={styles.transferSpeed}>{isPaused ? "—" : currentTransfer.speed}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <MaterialIcons name="wifi-tethering" size={22} color={palette.lime} />
+              <Text style={styles.transferTarget}>Descoberta local Android ativa</Text>
             </View>
-            <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${activeProgress * 100}%` }]} /></View>
-            <View style={styles.transferBottom}>
-              <View>
-                <Text style={styles.transferPercent}>{formatPercent(activeProgress)}</Text>
-                <Text style={styles.timeLeft}>{isPaused ? "Pronto para retomar" : "cerca de 48 s restantes"}</Text>
-              </View>
-              <View style={styles.transferActions}>
-                <Pressable onPress={() => setIsPaused((current) => !current)} style={styles.circleAction}>
-                  <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={18} color={palette.ink} />
-                </Pressable>
-                <Pressable onPress={() => setIsPaused(true)} style={[styles.circleAction, styles.cancelAction]}>
-                  <MaterialIcons name="close" size={17} color={palette.ink} />
-                </Pressable>
-              </View>
-            </View>
+            <Text style={[styles.transferStats, { marginTop: 10, lineHeight: 18 }]}>
+              {device
+                ? "O PC foi encontrado. O próximo passo é validar o certificado TLS e emparelhar com o código mostrado no Windows."
+                : "Quando o PC estiver ligado e a anunciar na rede local, aparecerá nesta área. O envio real ainda não está ativo."}
+            </Text>
             <View style={styles.integrityRow}>
-              <MaterialIcons name="security" size={14} color={palette.limeDark} />
-              <Text style={styles.integrityText}>Verificação de integridade no fim de cada ficheiro</Text>
+              <MaterialIcons name="security" size={14} color={palette.lime} />
+              <Text style={styles.integrityText}>Nenhuma transferência fictícia será apresentada como concluída.</Text>
             </View>
           </View>
         </View>
