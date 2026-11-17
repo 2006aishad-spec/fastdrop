@@ -90,16 +90,19 @@ class XTransferTransportModule : Module() {
         val promise = pendingPicker.getAndSet(null)
         if (promise != null) {
           try {
-            if (payload.resultCode != Activity.RESULT_OK || payload.data == null) {
+            val data = payload.data
+            if (payload.resultCode != Activity.RESULT_OK || data == null) {
               promise.resolve(emptyList<Map<String, Any>>())
             } else {
-              val data = payload.data
-              val context = appContext.applicationContext
+              val context: Context = appContext.reactContext?.applicationContext
+                ?: throw IllegalStateException("Contexto Android indisponível.")
               val uris = mutableListOf<Uri>()
               val clipData = data.clipData
               if (clipData != null) {
                 for (index in 0 until clipData.itemCount) clipData.getItemAt(index).uri?.let { uris.add(it) }
-              } else data.data?.let { uris.add(it) }
+              } else {
+                data.data?.let { uris.add(it) }
+              }
 
               val picked = uris.distinctBy { it.toString() }.map { uri ->
                 try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -239,7 +242,9 @@ class XTransferTransportModule : Module() {
   }
 
   private fun androidDeviceId(): String {
-    val prefs = appContext.applicationContext.getSharedPreferences("xtransfer-offline", Context.MODE_PRIVATE)
+    val context: Context = appContext.reactContext?.applicationContext
+      ?: throw IllegalStateException("Contexto Android indisponível.")
+    val prefs = context.getSharedPreferences("xtransfer-offline", Context.MODE_PRIVATE)
     val existing = prefs.getString("device_id", null)
     if (!existing.isNullOrBlank()) return existing
     val created = "android-" + UUID.randomUUID().toString()
@@ -251,7 +256,8 @@ class XTransferTransportModule : Module() {
     device: Map<String, Any?>, code: String, rawFiles: List<Map<String, Any?>>,
     transferId: String, control: TransferControl
   ): Map<String, Any> {
-    val context = appContext.applicationContext
+    val context: Context = appContext.reactContext?.applicationContext
+      ?: throw IllegalStateException("Contexto Android indisponível.")
     val host = device["ipAddress"] as? String ?: throw IllegalArgumentException("Endereço do PC inválido.")
     val port = (device["transferPort"] as? Number)?.toInt() ?: TRANSFER_PORT
     val expectedFingerprint = (device["certificateSha256"] as? String)?.lowercase()
