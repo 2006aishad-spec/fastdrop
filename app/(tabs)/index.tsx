@@ -1,5 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -53,10 +53,6 @@ export default function HomeScreen() {
       setIsScanning(false);
     }
   }, []);
-
-  useEffect(() => {
-    void scanForDevices();
-  }, [scanForDevices]);
 
   return (
     <ScreenContainer containerClassName="bg-[#F9FAF5]" safeAreaClassName="bg-[#F9FAF5]" edges={["top", "left", "right"]}>
