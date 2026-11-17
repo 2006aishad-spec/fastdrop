@@ -77,3 +77,33 @@
 - [ ] Implementar cliente Android correspondente, validação do fingerprint TLS e transferência real entre dispositivos.
 - [ ] Testar no Samsung Galaxy A16 e ASUS VivoBook E410KA, incluindo hotspot e perda de ligação.
 - [ ] Medir consumo e estabilidade numa máquina Windows com 2 GB de RAM.
+
+## Fase 3 — integração Android ↔ Windows
+
+### Fase 3.1 — descoberta real na rede local
+
+- [x] Criado módulo nativo Expo local para Android, sem adicionar dependência de serviço externo.
+- [x] Implementado listener UDP multicast no grupo 239.255.42.42:45555.
+- [x] Validar anúncios Windows FD/01, porta 45556 e fingerprint SHA-256 anunciada.
+- [x] Filtrar anúncios inválidos e endereços fora de redes locais privadas.
+- [x] Declaradas permissões Android necessárias para rede Wi-Fi e multicast.
+- [x] Substituído o PC fictício da interface por resultados reais da descoberta; removido o progresso demonstrativo.
+- [x] Criado workflow Android para TypeScript, lint, Expo prebuild e compilação Gradle.
+- [ ] Obter resultado verde do workflow Android no commit atual.
+- [ ] Testar descoberta real entre o Samsung Galaxy A16 e o ASUS VivoBook E410KA, na mesma Wi-Fi e via hotspot.
+
+### Fase 3.2 — ligação e emparelhamento seguro
+
+- [ ] Implementar socket TLS Android com pinning obrigatório da fingerprint recebida no anúncio.
+- [ ] Implementar PAIR, PAIR_ACCEPTED, AUTH e MANIFEST segundo FD/01.
+- [ ] Exibir confirmação do PC e campo para o código temporário apresentado no Windows.
+- [ ] Testar rejeição de fingerprint divergente e código expirado/incorreto.
+
+### Fase 3.3 — envio real de ficheiros
+
+- [ ] Integrar seletor Android nativo através do Storage Access Framework.
+- [ ] Calcular SHA-256 em streaming sem carregar ficheiros inteiros na memória.
+- [ ] Enviar FILE_BEGIN, chunks de até 1 MiB, aguardar ACK e respeitar offset de retoma.
+- [ ] Enviar FILE_END e confirmar FILE_COMPLETE após verificação do servidor.
+- [ ] Implementar cancelamento, desconexão e retoma.
+- [ ] Validar fotos, vídeos, PDFs, documentos, ZIP e ficheiros grandes em teste físico.
