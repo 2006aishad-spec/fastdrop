@@ -26,16 +26,27 @@ public sealed class PairingService
 
     public void Rotate(string deviceId)
     {
+        lock (_gate) RotateUnsafe(deviceId);
+    }
+
+    public void RotateIfCurrentSession(string sessionId)
+    {
         lock (_gate)
         {
-            var sessionId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            _ticket = new PairingTicket(deviceId, sessionId, token, DateTimeOffset.UtcNow + _ticketLifetime);
-            _ticket = _ticket with { TokenCode = CreateCode() };
-            _consumed = false;
-            _pairIssued = false;
-            _failures.Clear();
+            if (_ticket is null || !string.Equals(_ticket.SessionId, sessionId, StringComparison.Ordinal)) return;
+            RotateUnsafe("pending");
         }
+    }
+
+    private void RotateUnsafe(string deviceId)
+    {
+        var sessionId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        _ticket = new PairingTicket(deviceId, sessionId, token, DateTimeOffset.UtcNow + _ticketLifetime);
+        _ticket = _ticket with { TokenCode = CreateCode() };
+        _consumed = false;
+        _pairIssued = false;
+        _failures.Clear();
     }
 
     public bool TryPair(PairRequest request, out PairResponse response)
