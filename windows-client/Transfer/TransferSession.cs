@@ -75,7 +75,11 @@ public sealed class TransferSession
     {
         if (State != TransferState.Receiving || SessionFolder is null) throw new InvalidOperationException("A sessão não está a receber.");
         var entry = GetEntry(fileId);
-        if (_completedPaths.TryGetValue(fileId, out var completedPath)) return completedPath;
+        if (_completedPaths.TryGetValue(fileId, out var completedPath))
+        {
+            if (_finished.Count == _files.Count) State = TransferState.Completed;
+            return completedPath;
+        }
         if (!string.Equals(entry.Sha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Checksum final não corresponde ao manifesto.");
         var part = GetPartPath(entry);
         if (entry.Size == 0 && !File.Exists(part)) await File.WriteAllBytesAsync(part, Array.Empty<byte>(), cancellationToken);
