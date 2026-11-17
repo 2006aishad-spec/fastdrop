@@ -54,8 +54,11 @@ public sealed class LocalTransferServer : IAsyncDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var client = await _listener.AcceptTcpClientAsync(cancellationToken);
-                if (client.Client.RemoteEndPoint is IPEndPoint endpoint && !IsLocalAddress(endpoint.Address))
+                var remote = client.Client.RemoteEndPoint as IPEndPoint;
+                StatusChanged?.Invoke($"Ligação TCP recebida de {remote?.Address}.");
+                if (remote is not null && !IsLocalAddress(remote.Address))
                 {
+                    StatusChanged?.Invoke("Ligação rejeitada: origem fora da rede local.");
                     client.Dispose();
                     continue;
                 }
