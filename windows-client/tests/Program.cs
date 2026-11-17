@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -199,6 +200,8 @@ static class Test
             var pairing = new PairingService();
             await using var server = new LocalTransferServer(
                 pairing, new TransferStore(), () => root, certificate, transferPort: 0);
+            var serverEvents = new ConcurrentQueue<string>();
+            server.StatusChanged += serverEvents.Enqueue;
             server.Start();
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -210,9 +213,16 @@ static class Test
                 (_, presented, _, _) => presented is not null &&
                     CryptographicOperations.FixedTimeEquals(
                         SHA256.HashData(presented.GetRawCertData()), expectedFingerprint));
-            await tls.AuthenticateAsClientAsync(
-                new SslClientAuthenticationOptions { TargetHost = "localhost" },
-                timeout.Token);
+            try
+            {
+                await tls.AuthenticateAsClientAsync(
+                    new SslClientAuthenticationOptions { TargetHost = "localhost" },
+                    timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("TLS handshake falhou. Eventos do servidor: " + string.Join(" | ", serverEvents), ex);
+            }
 
             var reader = new Fd01Reader(tls);
             var writer = new Fd01Writer(tls);
