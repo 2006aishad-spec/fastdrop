@@ -52,8 +52,8 @@ public sealed class TransferStore
 
     public async Task SaveManifestAsync(TransferManifest manifest, CancellationToken cancellationToken = default)
     {
-        ValidateSessionId(manifest.SessionId);
-        var path = Path.Combine(_root, $"{manifest.SessionId}.manifest.json");
+        ValidateSessionId(manifest.TransferId ?? manifest.SessionId);
+        var path = Path.Combine(_root, $"{manifest.TransferId ?? manifest.SessionId}.manifest.json");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(manifest, Fd01Protocol.JsonOptions), cancellationToken);
     }
 
