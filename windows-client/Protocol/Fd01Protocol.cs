@@ -50,7 +50,8 @@ public sealed record ManifestEntry(
 public sealed record TransferManifest(
     string SessionId,
     string DeviceId,
-    IReadOnlyList<ManifestEntry> Files);
+    IReadOnlyList<ManifestEntry> Files,
+    string? TransferId = null);
 
 public sealed record FileBegin(string FileId);
 
