@@ -7,7 +7,7 @@ namespace FastDrop.Windows.Transfer;
 public sealed class TransferSession
 {
     private readonly TransferStore _store;
-    private readonly Dictionary<string, ManifestEntry> _files = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ManifestEntry> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _finished = new(StringComparer.Ordinal);
     private long _declaredBytes;
 
@@ -32,7 +32,12 @@ public sealed class TransferSession
         var path = GetPartPath(entry);
         if (!File.Exists(path)) return 0;
         var length = new FileInfo(path).Length;
-        return length <= entry.Size ? length : 0;
+        if (length > entry.Size)
+        {
+            File.Delete(path);
+            return 0;
+        }
+        return length;
     }
 
     public async Task<long> WriteChunkAsync(string fileId, long offset, ReadOnlyMemory<byte> chunk, string chunkSha256, CancellationToken cancellationToken = default)
@@ -40,7 +45,7 @@ public sealed class TransferSession
         if (State != TransferState.Receiving || SessionFolder is null) throw new InvalidOperationException("A sessão não está a receber.");
         var entry = GetEntry(fileId);
         if (_finished.Contains(fileId)) throw new InvalidDataException("O ficheiro já foi finalizado.");
-        if (offset < 0 || offset > entry.Size || chunk.Length > Fd01Protocol.MaxChunkBytes || chunk.Length > entry.Size - offset)
+        if (chunk.IsEmpty || offset < 0 || offset > entry.Size || chunk.Length > Fd01Protocol.MaxChunkBytes || chunk.Length > entry.Size - offset)
             throw new InvalidDataException("Offset ou tamanho do chunk inválido.");
         if (!IsSha256(chunkSha256)) throw new InvalidDataException("Checksum de chunk inválido.");
         var actualChunk = Convert.ToHexString(SHA256.HashData(chunk.Span)).ToLowerInvariant();
@@ -89,6 +94,7 @@ public sealed class TransferSession
         _declaredBytes = 0;
         foreach (var entry in manifest.Files)
         {
+            if (entry is null) throw new InvalidDataException("Entrada nula no manifesto.");
             if (string.IsNullOrWhiteSpace(entry.FileId) || entry.FileId.Length > 128 || entry.FileId.Any(c => !char.IsLetterOrDigit(c) && c != '-' && c != '_')) throw new InvalidDataException("FileId inválido.");
             if (!_files.TryAdd(entry.FileId, entry)) throw new InvalidDataException("FileId duplicado.");
             TransferStore.ValidateFileName(entry.Name);
@@ -100,6 +106,6 @@ public sealed class TransferSession
 
     private ManifestEntry GetEntry(string fileId) => _files.TryGetValue(fileId, out var entry) ? entry : throw new InvalidDataException("FileId não está no manifesto.");
     private string GetPartPath(ManifestEntry entry) => _store.GetPartPath(SessionFolder ?? throw new InvalidOperationException(), entry);
-    private static bool IsSha256(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);
+    private static bool IsSha256(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
     private static byte[] actualChunku8(string value) => Convert.FromHexString(value);
 }
