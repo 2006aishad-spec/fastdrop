@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -19,6 +20,8 @@ public sealed class LocalTransferServer : IAsyncDisposable
     private readonly Func<string> _destination;
     private readonly X509Certificate2 _certificate;
     private readonly SemaphoreSlim _connections = new(2, 2);
+    private readonly ConcurrentDictionary<int, Task> _clientTasks = new();
+    private int _nextClientId;
     private CancellationTokenSource? _cancellation;
     private Task? _acceptLoop;
 
@@ -53,7 +56,20 @@ public sealed class LocalTransferServer : IAsyncDisposable
                     client.Dispose();
                     continue;
                 }
-                _ = HandleClientAsync(client, cancellationToken);
+                if (!_connections.Wait(0))
+                {
+                    client.Dispose();
+                    continue;
+                }
+
+                var clientId = Interlocked.Increment(ref _nextClientId);
+                var clientTask = HandleClientAsync(client, cancellationToken);
+                _clientTasks.TryAdd(clientId, clientTask);
+                _ = clientTask.ContinueWith(
+                    _ => _clientTasks.TryRemove(clientId, out var ignored),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
         }
         catch (OperationCanceledException) { }
@@ -63,13 +79,12 @@ public sealed class LocalTransferServer : IAsyncDisposable
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken serverCancellation)
     {
-        await _connections.WaitAsync(serverCancellation);
         try
         {
             using (client)
             using (var connectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellation))
             {
-                connectionCancellation.CancelAfter(TimeSpan.FromMinutes(30));
+                connectionCancellation.CancelAfter(TimeSpan.FromSeconds(60));
                 var cancellationToken = connectionCancellation.Token;
                 try
                 {
@@ -105,6 +120,12 @@ public sealed class LocalTransferServer : IAsyncDisposable
                     if (!string.Equals(manifest.SessionId, auth.SessionId, StringComparison.Ordinal) || !_pairing.IsDeviceForSession(auth.SessionId, manifest.DeviceId))
                         throw new InvalidDataException("Sessão ou dispositivo do manifesto divergente.");
 
+                    // The authenticated device has consumed this code. Rotate now so the next device
+                    // gets a fresh one-time code while this transfer continues independently.
+                    _pairing.Rotate("pending");
+                    StatusChanged?.Invoke("Emparelhamento aceite. Novo código disponível.");
+
+                    connectionCancellation.CancelAfter(TimeSpan.FromMinutes(30));
                     var session = new TransferSession(_store);
                     await session.AcceptManifestAsync(manifest, _destination(), cancellationToken);
                     await writer.WriteMessageAsync("MANIFEST_ACCEPTED", new { sessionId = manifest.SessionId }, cancellationToken);
@@ -157,6 +178,8 @@ public sealed class LocalTransferServer : IAsyncDisposable
         _cancellation.Cancel();
         _listener.Stop();
         try { if (_acceptLoop is not null) await _acceptLoop; } catch (OperationCanceledException) { }
+        var activeClients = _clientTasks.Values.ToArray();
+        try { await Task.WhenAll(activeClients); } catch { /* Individual handlers report their own failures. */ }
         _connections.Dispose();
         _cancellation.Dispose();
     }
