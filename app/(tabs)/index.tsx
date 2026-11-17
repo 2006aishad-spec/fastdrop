@@ -219,7 +219,7 @@ export default function HomeScreen() {
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
             <Text style={styles.kicker}>TRANSFERÊNCIA RÁPIDA</Text>
-            <Text style={styles.heroTitle}>O caminho mais curto{\x60}\n{\x60}para os teus ficheiros.</Text>
+            <Text style={styles.heroTitle}>O caminho mais curto{"\n"}para os teus ficheiros.</Text>
             <Text style={styles.heroSub}>Sem cabo. Sem nuvem. Só os teus dispositivos.</Text>
           </View>
           <View style={styles.heroOrb}>
