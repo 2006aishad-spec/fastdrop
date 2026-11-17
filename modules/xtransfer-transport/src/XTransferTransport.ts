@@ -1,4 +1,5 @@
-import { Platform, requireNativeModule } from "expo";
+import { requireNativeModule } from "expo";
+import { Platform } from "react-native";
 
 export type DiscoveredWindowsDevice = {
   id: string;
