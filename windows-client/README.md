@@ -1,25 +1,57 @@
-# FastDrop para Windows
+# XTransfer Offline para Windows
 
-Cliente de receção leve para Windows 10 Home e versões posteriores. A primeira versão usa apenas WinForms e bibliotecas nativas .NET; não usa Electron, conta, internet ou servidor externo.
+Cliente WinForms leve para Windows 10 Home e versões posteriores. Não usa Electron, conta ou servidor externo.
 
-## Objetivo desta fase
+## Fase 2 implementada nesta branch
 
-Ao abrir, o cliente anuncia o computador na rede local através de UDP multicast, mostra que está pronto para receber e permite escolher a pasta de destino. A camada `Protocol` define o handshake FD/01, o manifesto, os chunks e os estados de transferência. A camada `Transfer` grava chunks por offset e verifica SHA-256 sem carregar o ficheiro inteiro em memória.
+- Listener TCP assíncrono em `45556`.
+- Emparelhamento com código de seis caracteres, expiração de cinco minutos, token aleatório efémero e bloqueio temporário após tentativas inválidas.
+- Autenticação obrigatória do token antes do manifesto.
+- Manifesto limitado por quantidade, tamanho de ficheiro, tamanho total, `fileId`, nome e SHA-256.
+- Receção por streaming em chunks de no máximo 1 MiB.
+- Escrita em `<fileId>.part`, com retoma pelo tamanho existente.
+- Validação de offset, tamanho do chunk e SHA-256 do chunk.
+- Verificação SHA-256 completa antes de mover o ficheiro para o nome final.
+- Proteção contra traversal, nomes inválidos, ficheiros duplicados e falta de espaço.
+- Cancelamento, timeout, desconexão e erros são tratados sem marcar uma transferência como concluída.
 
-## Compilar no Windows
+## Framing FD/01 da primeira implementação
 
-Instalar o .NET 8 SDK no computador de desenvolvimento e executar:
+Cada mensagem de controlo é uma linha UTF-8 com o formato `COMANDO JSON`. Os bytes de um chunk seguem imediatamente a linha `CHUNK` e têm exatamente o tamanho declarado.
+
+```text
+PAIR {"deviceId":"...","code":"ABC234","nonce":"..."}
+PAIR_ACCEPTED {"accepted":true,"sessionId":"...","token":"..."}
+AUTH {"sessionId":"...","token":"..."}
+MANIFEST {"sessionId":"...","deviceId":"...","files":[...]}
+FILE_BEGIN {"fileId":"..."}
+RESUME {"fileId":"...","offset":0}
+CHUNK {"fileId":"...","offset":0,"length":123,"sha256":"..."}\n<123 bytes>
+ACK {"fileId":"...","offset":123}
+FILE_END {"fileId":"...","sha256":"..."}
+FILE_COMPLETE {"fileId":"...","name":"..."}
+```
+
+O Android ainda não implementa este framing nesta branch. Portanto, o listener Windows está pronto para integração, mas a transferência entre dispositivos ainda não deve ser anunciada como concluída.
+
+## Compilar o cliente
+
+Num computador Windows com .NET 8 SDK:
 
 ```powershell
 dotnet restore .\FastDrop.Windows.csproj
 dotnet build .\FastDrop.Windows.csproj -c Release
- dotnet publish .\FastDrop.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\publish\win-x64
+.\build.ps1 -Runtime win-x64
 ```
 
-O executável publicado pode ser copiado para outros PCs Windows 10 x64. Para máquinas antigas x86, publicar com `-r win-x86`.
+O executável autónomo ficará em `publish\win-x64\`. Para Windows x86, utilize `-Runtime win-x86`. A compatibilidade real com cada máquina Windows deve ser validada através de teste físico.
 
-## Próximo encaixe com o Android
+## Testes automatizados
 
-O telemóvel deve descobrir o anúncio FD/01, apresentar o código visual ao utilizador e chamar o endpoint de emparelhamento do cliente Windows. Depois envia um manifesto e chunks com `sessionId`, `fileId`, `offset` e checksum. O cliente só marca o ficheiro como concluído após a verificação SHA-256.
+O projeto separado em `tests\FastDrop.Protocol.Tests.csproj` valida rejeição de traversal, gravação e SHA-256, além de retoma a partir de `.part`:
 
-Nesta fase, o processo de rede real ainda está isolado atrás das classes de protocolo e sessão; o próximo passo é ligar o listener HTTP local na porta FD/01 45556 e implementar o handshake com confirmação visual.
+```powershell
+dotnet run --project .\tests\FastDrop.Protocol.Tests.csproj
+```
+
+O ambiente Manus atual não possui .NET SDK; por isso a execução destes testes deve ser feita num Windows ou numa máquina com .NET 8 instalado. O código não é apresentado como compilado nesta sessão.

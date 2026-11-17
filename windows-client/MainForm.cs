@@ -8,6 +8,8 @@ namespace FastDrop.Windows;
 public sealed class MainForm : Form
 {
     private readonly LocalDiscoveryService _discovery;
+    private readonly PairingService _pairing = new();
+    private readonly LocalTransferServer _transferServer;
     private readonly TransferStore _store = new();
     private readonly Label _statusLabel = new();
     private readonly Label _detailLabel = new();
@@ -28,10 +30,12 @@ public sealed class MainForm : Form
         MaximizeBox = false;
 
         _discovery = new LocalDiscoveryService(Environment.MachineName);
+        _transferServer = new LocalTransferServer(_pairing, _store, () => _destination);
         _discovery.AnnouncementSent += announcement => BeginInvoke(() => SetOnlineState(announcement));
+        _transferServer.StatusChanged += status => BeginInvoke(() => SetServerState(status));
         BuildUi();
-        Shown += (_, _) => _discovery.Start();
-        FormClosed += async (_, _) => await _discovery.DisposeAsync();
+        Shown += (_, _) => { _transferServer.Start(); _discovery.Start(); };
+        FormClosed += async (_, _) => { await _transferServer.DisposeAsync(); await _discovery.DisposeAsync(); };
     }
 
     private void BuildUi()
@@ -76,8 +80,13 @@ public sealed class MainForm : Form
     private void SetOnlineState(DiscoveryAnnouncement announcement)
     {
         _statusLabel.Text = "Este PC está pronto";
-        _detailLabel.Text = $"A aguardar ligação local · {announcement.ProtocolVersion} · porta {announcement.TransferPort}";
+        _detailLabel.Text = $"A aguardar ligação local · {announcement.ProtocolVersion} · porta {announcement.TransferPort} · código {_pairing.CurrentCode}";
         _statusOrb.BackColor = Color.FromArgb(216, 243, 106);
+    }
+
+    private void SetServerState(string status)
+    {
+        if (!IsDisposed) _detailLabel.Text = $"{status} · código {_pairing.CurrentCode}";
     }
 
     private void ChooseDestination()

@@ -44,3 +44,15 @@
 - [ ] Ligar o listener HTTP local na porta FD/01 e o emparelhamento com confirmação visual de seis caracteres.
 - [ ] Ligar o envio real do Android ao manifesto, chunks, retomada e confirmação de integridade do cliente Windows.
 - [ ] Compilar e testar o executável publicado num PC Windows 10 Home x64 e validar o comportamento numa máquina com 2 GB de RAM.
+
+## Fase 2 — servidor TCP Windows
+
+- [x] Listener TCP assíncrono na porta `45556`.
+- [x] Emparelhamento com código temporário, expiração, token de sessão e limite de tentativas.
+- [x] Validação de manifesto, nomes, IDs, tamanhos, offsets, chunks e SHA-256.
+- [x] Escrita streaming em `.part`, ACK por chunk, retoma e finalização após hash completo.
+- [x] Tratamento de cancelamento, timeout, desconexão e erros sem marcar falsos sucessos.
+- [x] Criado projeto de testes automatizados sem dependências externas.
+- [ ] Executar os testes C# num ambiente com .NET 8 SDK.
+- [ ] Implementar cliente Android correspondente antes de declarar transferência real entre dispositivos.
+- [ ] Adicionar TLS ou mecanismo equivalente de associação criptográfica antes de declarar o canal protegido.
