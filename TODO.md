@@ -42,7 +42,7 @@
 - [x] O utilizador pode escolher a pasta onde os ficheiros recebidos serão guardados.
 - [x] A camada de sessão grava manifestos, escreve chunks por offset e verifica SHA-256 sem carregar o ficheiro inteiro em memória.
 - [x] Ligar o listener TCP local na porta FD/01 e o emparelhamento com código temporário de seis caracteres.
-- [ ] Ligar o envio real do Android ao manifesto, chunks, retomada e confirmação de integridade do cliente Windows.
+- [x] Ligar o envio real do Android ao manifesto, chunks, retoma e confirmação de integridade do cliente Windows (build/CI e hardware ainda pendentes).
 - [ ] Compilar e testar o executável publicado num PC Windows 10 Home x64 e validar o comportamento numa máquina com 2 GB de RAM.
 
 ## Fase 2 — servidor TCP Windows
@@ -55,7 +55,7 @@
 - [x] Criado projeto de testes automatizados sem dependências externas.
 - [x] Executar build e testes C# no GitHub Actions com Windows Server e .NET 8.
 - [x] Adicionar TLS 1.2/1.3 no listener Windows, certificado local persistente e fingerprint anunciada para pinning.
-- [ ] Implementar cliente Android correspondente antes de declarar transferência real entre dispositivos.
+- [x] Implementar cliente Android correspondente (validação de build e teste físico ainda pendentes).
 - [ ] Validar pinning TLS no cliente Android e concluir teste real Android ↔ Windows.
 
 ## Fase 2.1 — correção e validação
@@ -74,9 +74,35 @@
 - [x] Build, testes de protocolo, integração TLS e publicação win-x64 passaram numa execução do GitHub Actions no commit bb246ddef0d7378bc35443804ad4c077dca7cf8a.
 - [ ] Revalidar o mesmo pipeline após os últimos reforços de limite global de tentativas e renovação condicional do ticket.
 - [ ] Implementar regra de Firewall do Windows com escopo restrito à rede local; requer validação de permissões e comportamento em Windows 10.
-- [ ] Implementar cliente Android correspondente, validação do fingerprint TLS e transferência real entre dispositivos.
+- [x] Implementar cliente Android com pinning TLS, emparelhamento e envio real por chunks (validação CI e física pendentes).
 - [ ] Testar no Samsung Galaxy A16 e ASUS VivoBook E410KA, incluindo hotspot e perda de ligação.
 - [ ] Medir consumo e estabilidade numa máquina Windows com 2 GB de RAM.
+
+### Fase 3.4 — retoma e integridade
+
+- [x] Separado transferId estável do sessionId efémero de cada emparelhamento.
+- [x] Windows usa a pasta de transferência estável para manter os blocos .part entre novas sessões TLS.
+- [x] Android guarda localmente transferId, fileIds e URIs selecionados para retoma após reabrir a aplicação, dependendo da persistência SAF do fornecedor.
+- [x] Retoma continua a partir do offset confirmado pelo Windows.
+- [x] Pausa fecha a ligação sem apagar blocos parciais.
+- [x] Cancelamento envia CANCEL entre chunks confirmados e o Windows remove os .part da transferência.
+- [x] SHA-256 completo validado no Windows antes de mover o ficheiro para o nome final.
+- [x] Adicionado teste Windows de retoma entre dois emparelhamentos com sessionIds diferentes.
+- [ ] Executar os testes automatizados após todos os últimos commits e obter pipelines CI verdes.
+- [ ] Testar rede interrompida, pausa, retoma e cancelamento no Galaxy A16 ↔ ASUS VivoBook E410KA.
+
+### Teste físico obrigatório — Galaxy A16 e ASUS VivoBook E410KA
+
+- [ ] Descoberta na mesma rede Wi-Fi.
+- [ ] Descoberta via hotspot do Galaxy A16.
+- [ ] Bloqueio quando a fingerprint TLS diverge.
+- [ ] Rejeição de código incorreto ou expirado.
+- [ ] Envio de fotos, vídeos, PDF, DOCX/XLSX, ZIP e ficheiro vazio.
+- [ ] Interrupção a meio e retoma a partir do offset confirmado.
+- [ ] Cancelamento e remoção dos .part dessa transferência.
+- [ ] Comparação SHA-256 da origem e do destino.
+- [ ] Medição da RAM e teste com ficheiros grandes no ASUS.
+
 
 ## Fase 3 — integração Android ↔ Windows
 
@@ -94,16 +120,17 @@
 
 ### Fase 3.2 — ligação e emparelhamento seguro
 
-- [ ] Implementar socket TLS Android com pinning obrigatório da fingerprint recebida no anúncio.
-- [ ] Implementar PAIR, PAIR_ACCEPTED, AUTH e MANIFEST segundo FD/01.
-- [ ] Exibir confirmação do PC e campo para o código temporário apresentado no Windows.
-- [ ] Testar rejeição de fingerprint divergente e código expirado/incorreto.
+- [x] Implementado socket TLS Android com TLS 1.2/1.3.
+- [x] Implementado pinning obrigatório da fingerprint SHA-256 DER recebida no anúncio.
+- [x] Implementadas mensagens PAIR, PAIR_ACCEPTED/PAIR_REJECTED, AUTH e MANIFEST segundo FD/01.
+- [x] Interface Android permite introduzir o código temporário apresentado no Windows.
+- [ ] Obter build Android verde e testar fingerprint divergente, código incorreto/expirado e utilização única em hardware físico.
 
 ### Fase 3.3 — envio real de ficheiros
 
-- [ ] Integrar seletor Android nativo através do Storage Access Framework.
-- [ ] Calcular SHA-256 em streaming sem carregar ficheiros inteiros na memória.
-- [ ] Enviar FILE_BEGIN, chunks de até 1 MiB, aguardar ACK e respeitar offset de retoma.
-- [ ] Enviar FILE_END e confirmar FILE_COMPLETE após verificação do servidor.
-- [ ] Implementar cancelamento, desconexão e retoma.
-- [ ] Validar fotos, vídeos, PDFs, documentos, ZIP e ficheiros grandes em teste físico.
+- [x] Integrado seletor Android nativo SAF com seleção múltipla.
+- [x] Calculado SHA-256 em streaming sem carregar ficheiros inteiros na memória.
+- [x] Enviados chunks até 1 MiB, cada um com checksum SHA-256 e ACK validado por offset.
+- [x] Implementados FILE_BEGIN, RESUME, FILE_END e confirmação FILE_COMPLETE.
+- [x] Interface usa eventos reais do módulo nativo, sem progresso simulado.
+- [ ] Obter build Android verde e validar fotos, vídeos, PDFs, documentos, ZIP, ficheiros vazios e ficheiros grandes em teste físico.
