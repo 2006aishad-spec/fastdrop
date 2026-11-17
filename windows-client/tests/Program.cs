@@ -190,11 +190,8 @@ static class Test
         Directory.CreateDirectory(root);
         try
         {
-            using var rsa = RSA.Create(2048);
-            var certificateRequest = new CertificateRequest(
-                "CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            using var certificate = certificateRequest.CreateSelfSigned(
-                DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+            using var tlsCertificate = new LocalTlsCertificate(Path.Combine(root, "tls"));
+            var certificate = tlsCertificate.Certificate;
             var expectedFingerprint = SHA256.HashData(certificate.RawData);
 
             var pairing = new PairingService();
