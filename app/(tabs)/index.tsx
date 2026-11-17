@@ -1,15 +1,27 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useCallback, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  TextInput,
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { scanForWindowsDevices, type DiscoveredWindowsDevice } from "@/modules/xtransfer-transport/src";
+import {
+  addTransferProgressListener,
+  cancelTransfer,
+  pauseTransfer,
+  pickTransferFiles,
+  scanForWindowsDevices,
+  sendTransferFiles,
+  type DiscoveredWindowsDevice,
+  type PickedTransferFile,
+  type TransferProgressEvent,
+} from "@/modules/xtransfer-transport/src";
 
 const palette = {
   ink: "#182018",
@@ -35,11 +47,68 @@ function SectionLabel({ eyebrow, title, action }: { eyebrow: string; title: stri
   );
 }
 
+const PENDING_TRANSFER_KEY = "xtransfer-offline.pending-transfer.v1";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
+}
+
+function createLocalId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function HomeScreen() {
   const [isScanning, setIsScanning] = useState(false);
   const [devices, setDevices] = useState<DiscoveredWindowsDevice[]>([]);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<PickedTransferFile[]>([]);
+  const [transferId, setTransferId] = useState("");
+  const [pairingCode, setPairingCode] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [progress, setProgress] = useState<TransferProgressEvent | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const device = devices[0] ?? null;
+  const selectedBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  const percent = progress && progress.totalBytes > 0
+    ? Math.min(100, Math.round((progress.sentBytes / progress.totalBytes) * 100))
+    : 0;
+
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(PENDING_TRANSFER_KEY).then((raw) => {
+      if (!active || !raw) return;
+      try {
+        const saved = JSON.parse(raw) as { transferId?: string; files?: PickedTransferFile[] };
+        if (saved.transferId && Array.isArray(saved.files) && saved.files.length > 0) {
+          setTransferId(saved.transferId);
+          setSelectedFiles(saved.files);
+          setProgress({
+            status: "paused",
+            transferId: saved.transferId,
+            sentBytes: 0,
+            totalBytes: saved.files.reduce((sum, file) => sum + file.size, 0),
+            currentFile: "",
+            message: "Transferência guardada neste telemóvel. Emparelha novamente para retomar."
+          });
+        }
+      } catch {
+        void AsyncStorage.removeItem(PENDING_TRANSFER_KEY);
+      }
+    }).catch(() => undefined);
+    const subscription = addTransferProgressListener(setProgress);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
 
   const scanForDevices = useCallback(async () => {
     setIsScanning(true);
@@ -54,6 +123,82 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const chooseFiles = useCallback(async () => {
+    setOperationError(null);
+    try {
+      const picked = await pickTransferFiles();
+      if (picked.length === 0) return;
+      const nextFiles = picked.map((file, index) => ({
+        ...file,
+        fileId: createLocalId(`file${index}`),
+      }));
+      const nextTransferId = createLocalId("job");
+      setSelectedFiles(nextFiles);
+      setTransferId(nextTransferId);
+      setProgress(null);
+      await AsyncStorage.setItem(PENDING_TRANSFER_KEY, JSON.stringify({
+        transferId: nextTransferId,
+        files: nextFiles
+      }));
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "Não foi possível selecionar ficheiros.");
+    }
+  }, []);
+
+  const beginTransfer = useCallback(async () => {
+    if (!device || !transferId || selectedFiles.length === 0) return;
+    if (!/^[A-Za-z0-9]{6}$/.test(pairingCode.trim())) {
+      setOperationError("Introduz os seis caracteres apresentados no Windows.");
+      return;
+    }
+    setOperationError(null);
+    setIsTransferring(true);
+    try {
+      const result = await sendTransferFiles(device, pairingCode, selectedFiles, transferId);
+      if (result.status === "completed") {
+        await AsyncStorage.removeItem(PENDING_TRANSFER_KEY);
+        setSelectedFiles([]);
+        setTransferId("");
+        setPairingCode("");
+        setProgress({
+          status: "completed",
+          transferId,
+          sentBytes: selectedBytes,
+          totalBytes: selectedBytes,
+          currentFile: "",
+          message: "Transferência concluída. O Windows confirmou o SHA-256 de todos os ficheiros."
+        });
+      } else if (result.status === "paused") {
+        setProgress((current) => current ?? {
+          status: "paused", transferId, sentBytes: 0, totalBytes: selectedBytes,
+          currentFile: "", message: "Transferência pausada. Podes emparelhar novamente para retomar."
+        });
+      } else {
+        await AsyncStorage.removeItem(PENDING_TRANSFER_KEY);
+        setSelectedFiles([]);
+        setTransferId("");
+        setProgress({
+          status: "cancelled", transferId, sentBytes: 0, totalBytes: selectedBytes,
+          currentFile: "", message: "Transferência cancelada. Os blocos temporários desta sessão foram eliminados no Windows."
+        });
+      }
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "A transferência falhou.");
+    } finally {
+      setIsTransferring(false);
+    }
+  }, [device, pairingCode, selectedFiles, selectedBytes, transferId]);
+
+  const requestPause = useCallback(async () => {
+    const accepted = await pauseTransfer();
+    if (!accepted) setOperationError("Não há transferência ativa para pausar.");
+  }, []);
+
+  const requestCancel = useCallback(async () => {
+    const accepted = await cancelTransfer();
+    if (!accepted) setOperationError("Não há transferência ativa para cancelar.");
+  }, []);
+
   return (
     <ScreenContainer containerClassName="bg-[#F9FAF5]" safeAreaClassName="bg-[#F9FAF5]" edges={["top", "left", "right"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -63,7 +208,7 @@ export default function HomeScreen() {
               <View style={styles.brandArrowOne} />
               <View style={styles.brandArrowTwo} />
             </View>
-            <Text style={styles.brandName}>fastdrop</Text>
+            <Text style={styles.brandName}>XTransfer Offline</Text>
           </View>
           <View style={styles.localPill}>
             <View style={styles.liveDot} />
@@ -74,7 +219,7 @@ export default function HomeScreen() {
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
             <Text style={styles.kicker}>TRANSFERÊNCIA RÁPIDA</Text>
-            <Text style={styles.heroTitle}>O caminho mais curto{`\n`}para os teus ficheiros.</Text>
+            <Text style={styles.heroTitle}>O caminho mais curto{\x60}\n{\x60}para os teus ficheiros.</Text>
             <Text style={styles.heroSub}>Sem cabo. Sem nuvem. Só os teus dispositivos.</Text>
           </View>
           <View style={styles.heroOrb}>
@@ -92,10 +237,10 @@ export default function HomeScreen() {
             </View>
             <View style={styles.deviceCopy}>
               <Text style={styles.deviceName}>{device?.name ?? (isScanning ? "A procurar computadores…" : "Nenhum PC encontrado")}</Text>
-              <Text style={styles.deviceMeta}>{device ? "Windows · FD/01" : "Liga o PC à mesma rede Wi-Fi ou hotspot."}</Text>
+              <Text style={styles.deviceMeta}>{device ? "Windows · FD/01 · TLS obrigatório" : "Liga o PC à mesma rede Wi-Fi ou hotspot."}</Text>
               <Text style={styles.deviceCode}>{device ? `${device.ipAddress}:${device.transferPort}` : (scanError ?? "A descoberta usa apenas a rede local.")}</Text>
             </View>
-            {device ? <View style={styles.deviceCheck}><MaterialIcons name="desktop-windows" size={19} color={palette.limeDark} /></View> : null}
+            {device ? <View style={styles.deviceCheck}><MaterialIcons name="verified-user" size={19} color={palette.limeDark} /></View> : null}
           </View>
           <View style={styles.deviceFooter}>
             <View style={styles.connectedRow}>
@@ -109,33 +254,89 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.sectionGap}>
-          <SectionLabel eyebrow="02 / SELEÇÃO" title="Preparar ficheiros" action="A SEGUIR" />
+          <SectionLabel eyebrow="02 / SELEÇÃO" title="Preparar ficheiros" action={selectedFiles.length ? `${selectedFiles.length} SELECIONADO(S)` : "MÚLTIPLA SELEÇÃO"} />
           <View style={styles.fileCard}>
-            <View style={{ paddingVertical: 18, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <MaterialIcons name="folder-open" size={22} color={palette.limeDark} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.moreFilesText}>Seletor de ficheiros ainda não ligado</Text>
-                <Text style={styles.fileMeta}>A seleção real será ativada na próxima etapa da integração.</Text>
+            {selectedFiles.length === 0 ? (
+              <View style={{ paddingVertical: 18, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <MaterialIcons name="folder-open" size={22} color={palette.limeDark} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.moreFilesText}>Escolhe fotos, vídeos ou documentos</Text>
+                  <Text style={styles.fileMeta}>O seletor Android permite selecionar vários tipos de ficheiro.</Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={{ paddingTop: 6 }}>
+                {selectedFiles.map((file) => (
+                  <View key={file.fileId} style={styles.selectedItem}>
+                    <MaterialIcons name="insert-drive-file" size={19} color={palette.limeDark} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                      <Text style={styles.fileMeta}>{formatBytes(file.size)} · {file.mimeType}</Text>
+                    </View>
+                  </View>
+                ))}
+                <Text style={[styles.fileMeta, { paddingVertical: 10 }]}>Total selecionado: {formatBytes(selectedBytes)}</Text>
+              </View>
+            )}
+            <Pressable onPress={() => { void chooseFiles(); }} disabled={isTransferring} style={styles.chooseFilesButton}>
+              <MaterialIcons name="add" size={19} color={palette.ink} />
+              <Text style={styles.chooseFilesText}>{selectedFiles.length ? "Escolher outros ficheiros" : "Escolher ficheiros"}</Text>
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.sectionGap}>
-          <SectionLabel eyebrow="03 / TRANSPORTE" title="Envio de ficheiros" action="EM INTEGRAÇÃO" />
+          <SectionLabel eyebrow="03 / EMPARELHAMENTO E ENVIO" title="Ligar ao Windows" action="CÓDIGO DE 6 CARACTERES" />
           <View style={styles.transferCard}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <MaterialIcons name="wifi-tethering" size={22} color={palette.lime} />
-              <Text style={styles.transferTarget}>Descoberta local Android ativa</Text>
-            </View>
-            <Text style={[styles.transferStats, { marginTop: 10, lineHeight: 18 }]}>
-              {device
-                ? "O PC foi encontrado. O próximo passo é validar o certificado TLS e emparelhar com o código mostrado no Windows."
-                : "Quando o PC estiver ligado e a anunciar na rede local, aparecerá nesta área. O envio real ainda não está ativo."}
+            <Text style={styles.transferTarget}>{device ? `Enviar para ${device.name}` : "À espera de um PC Windows"}</Text>
+            <Text style={[styles.transferStats, { marginTop: 6, lineHeight: 18 }]}>
+              Abre o XTransfer Offline no ASUS e introduz o código temporário que aparece na janela do Windows.
             </Text>
+            <TextInput
+              value={pairingCode}
+              onChangeText={(value) => setPairingCode(value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+              placeholder="CÓDIGO"
+              placeholderTextColor="#7E8B78"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={6}
+              editable={!isTransferring}
+              style={styles.codeInput}
+            />
+            <Pressable
+              onPress={() => { void beginTransfer(); }}
+              disabled={!device || selectedFiles.length === 0 || isTransferring}
+              style={[styles.sendButton, (!device || selectedFiles.length === 0 || isTransferring) && styles.actionButtonDisabled]}
+            >
+              <MaterialIcons name="lock" size={18} color={palette.ink} />
+              <Text style={styles.sendButtonText}>{isTransferring ? "A transferir…" : "Emparelhar e enviar"}</Text>
+            </Pressable>
+            {isTransferring ? (
+              <View style={styles.transferControls}>
+                <Pressable onPress={() => { void requestPause(); }} style={styles.secondaryAction}>
+                  <MaterialIcons name="pause" size={18} color={palette.white} />
+                  <Text style={styles.secondaryActionText}>Pausar</Text>
+                </Pressable>
+                <Pressable onPress={() => { void requestCancel(); }} style={styles.secondaryAction}>
+                  <MaterialIcons name="close" size={18} color={palette.white} />
+                  <Text style={styles.secondaryActionText}>Cancelar</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {progress ? (
+              <View style={{ marginTop: 17 }}>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${percent}%` }]} />
+                </View>
+                <Text style={styles.transferStats}>{progress.status === "hashing" ? "A calcular integridade…" : progress.status === "sending" || progress.status === "file-complete" ? `${percent}% · ${formatBytes(progress.sentBytes)} de ${formatBytes(progress.totalBytes)}` : progress.status.toUpperCase()}</Text>
+                <Text style={styles.progressMessage}>{progress.message}</Text>
+                {progress.currentFile ? <Text style={styles.progressMessage}>Ficheiro: {progress.currentFile}</Text> : null}
+              </View>
+            ) : null}
+            {operationError ? <Text style={styles.errorText}>{operationError}</Text> : null}
             <View style={styles.integrityRow}>
-              <MaterialIcons name="security" size={14} color={palette.lime} />
-              <Text style={styles.integrityText}>Nenhuma transferência fictícia será apresentada como concluída.</Text>
+              <MaterialIcons name="verified-user" size={14} color={palette.lime} />
+              <Text style={styles.integrityText}>TLS com fingerprint fixa · SHA-256 por ficheiro · ACK por bloco.</Text>
             </View>
           </View>
         </View>
@@ -221,4 +422,17 @@ const styles = StyleSheet.create({
   bottomNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 25, paddingHorizontal: 2 },
   bottomNoteText: { fontSize: 11, color: palette.muted },
   protocol: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: palette.muted, marginLeft: "auto" },
+  selectedItem: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: palette.faint },
+  chooseFilesButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 10, marginTop: 4, backgroundColor: palette.lime, borderRadius: 12 },
+  chooseFilesText: { color: palette.ink, fontSize: 13, fontWeight: "800" },
+  codeInput: { height: 50, marginTop: 15, backgroundColor: "#273227", borderColor: "#4A5A45", borderWidth: 1, borderRadius: 12, color: palette.white, textAlign: "center", fontSize: 20, fontWeight: "800", letterSpacing: 5 },
+  sendButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 12, backgroundColor: palette.lime, borderRadius: 12 },
+  sendButtonText: { color: palette.ink, fontSize: 13, fontWeight: "900" },
+  actionButtonDisabled: { opacity: 0.45 },
+  transferControls: { flexDirection: "row", gap: 10, marginTop: 10 },
+  secondaryAction: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#344031", borderRadius: 11 },
+  secondaryActionText: { color: palette.white, fontSize: 12, fontWeight: "700" },
+  progressMessage: { color: "#AAB4A4", fontSize: 10, marginTop: 6, lineHeight: 15 },
+  errorText: { color: "#FFD0C7", fontSize: 11, marginTop: 12, lineHeight: 16 },
+
 });
