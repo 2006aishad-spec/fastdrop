@@ -117,7 +117,8 @@ public sealed class LocalTransferServer : IAsyncDisposable
                     var auth = await ReadMessageAsync<PairAuth>(reader, "AUTH", cancellationToken);
                     if (!_pairing.Authorize(auth))
                     {
-                        _pairing.RotateIfCurrentSession(auth.SessionId);
+                        if (reservedSessionId is not null)
+                            _pairing.RotateIfCurrentSession(reservedSessionId);
                         reservedSessionId = null;
                         await writer.WriteMessageAsync("ERROR", new ErrorMessage("Não autorizado ou sessão já utilizada."), cancellationToken);
                         return;
