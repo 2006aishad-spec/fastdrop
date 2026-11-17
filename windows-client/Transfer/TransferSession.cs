@@ -21,7 +21,7 @@ public sealed class TransferSession
     {
         ValidateManifest(manifest);
         _store.EnsureFreeSpace(destination, _declaredBytes);
-        SessionFolder = _store.GetSessionFolder(manifest.SessionId, destination);
+        SessionFolder = _store.GetSessionFolder(manifest.TransferId ?? manifest.SessionId, destination);
         await _store.SaveManifestAsync(manifest, cancellationToken);
         State = TransferState.Receiving;
     }
@@ -83,11 +83,23 @@ public sealed class TransferSession
         return finalPath;
     }
 
-    public void Cancel() => State = TransferState.Cancelled;
+    public void Cancel()
+    {
+        if (SessionFolder is not null)
+        {
+            foreach (var entry in _files.Values)
+            {
+                var part = GetPartPath(entry);
+                try { if (File.Exists(part)) File.Delete(part); } catch (IOException) { }
+            }
+        }
+        State = TransferState.Cancelled;
+    }
 
     private void ValidateManifest(TransferManifest manifest)
     {
         TransferStore.ValidateSessionId(manifest.SessionId);
+        TransferStore.ValidateSessionId(manifest.TransferId ?? manifest.SessionId);
         if (string.IsNullOrWhiteSpace(manifest.DeviceId) || manifest.DeviceId.Length > 128) throw new InvalidDataException("Dispositivo inválido.");
         if (manifest.Files is null || manifest.Files.Count == 0 || manifest.Files.Count > Fd01Protocol.MaxManifestFiles) throw new InvalidDataException("Manifesto vazio ou demasiado grande.");
         _files.Clear();
