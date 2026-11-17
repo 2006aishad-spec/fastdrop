@@ -78,32 +78,6 @@
 - [ ] Testar no Samsung Galaxy A16 e ASUS VivoBook E410KA, incluindo hotspot e perda de ligação.
 - [ ] Medir consumo e estabilidade numa máquina Windows com 2 GB de RAM.
 
-### Fase 3.4 — retoma e integridade
-
-- [x] Separado transferId estável do sessionId efémero de cada emparelhamento.
-- [x] Windows usa a pasta de transferência estável para manter os blocos .part entre novas sessões TLS.
-- [x] Android guarda localmente transferId, fileIds e URIs selecionados para retoma após reabrir a aplicação, dependendo da persistência SAF do fornecedor.
-- [x] Retoma continua a partir do offset confirmado pelo Windows.
-- [x] Pausa fecha a ligação sem apagar blocos parciais.
-- [x] Cancelamento envia CANCEL entre chunks confirmados e o Windows remove os .part da transferência.
-- [x] SHA-256 completo validado no Windows antes de mover o ficheiro para o nome final.
-- [x] Adicionado teste Windows de retoma entre dois emparelhamentos com sessionIds diferentes.
-- [ ] Executar os testes automatizados após todos os últimos commits e obter pipelines CI verdes.
-- [ ] Testar rede interrompida, pausa, retoma e cancelamento no Galaxy A16 ↔ ASUS VivoBook E410KA.
-
-### Teste físico obrigatório — Galaxy A16 e ASUS VivoBook E410KA
-
-- [ ] Descoberta na mesma rede Wi-Fi.
-- [ ] Descoberta via hotspot do Galaxy A16.
-- [ ] Bloqueio quando a fingerprint TLS diverge.
-- [ ] Rejeição de código incorreto ou expirado.
-- [ ] Envio de fotos, vídeos, PDF, DOCX/XLSX, ZIP e ficheiro vazio.
-- [ ] Interrupção a meio e retoma a partir do offset confirmado.
-- [ ] Cancelamento e remoção dos .part dessa transferência.
-- [ ] Comparação SHA-256 da origem e do destino.
-- [ ] Medição da RAM e teste com ficheiros grandes no ASUS.
-
-
 ## Fase 3 — integração Android ↔ Windows
 
 ### Fase 3.1 — descoberta real na rede local
@@ -134,3 +108,28 @@
 - [x] Implementados FILE_BEGIN, RESUME, FILE_END e confirmação FILE_COMPLETE.
 - [x] Interface usa eventos reais do módulo nativo, sem progresso simulado.
 - [ ] Obter build Android verde e validar fotos, vídeos, PDFs, documentos, ZIP, ficheiros vazios e ficheiros grandes em teste físico.
+
+### Fase 3.4 — retoma e integridade
+
+- [x] Separado transferId estável do sessionId efémero de cada emparelhamento.
+- [x] Windows usa a pasta de transferência estável para manter os blocos .part entre novas sessões TLS.
+- [x] Android guarda localmente transferId, fileIds e URIs selecionados para retoma após reabrir a aplicação, dependendo da persistência SAF do fornecedor.
+- [x] Retoma continua a partir do offset confirmado pelo Windows.
+- [x] Pausa fecha a ligação sem apagar blocos parciais.
+- [x] Cancelamento envia CANCEL entre chunks confirmados e o Windows remove os .part da transferência.
+- [x] SHA-256 completo validado no Windows antes de mover o ficheiro para o nome final.
+- [x] Adicionado teste Windows de retoma entre dois emparelhamentos com sessionIds diferentes.
+- [ ] Executar os testes automatizados após todos os últimos commits e obter pipelines CI verdes.
+- [ ] Testar rede interrompida, pausa, retoma e cancelamento no Galaxy A16 ↔ ASUS VivoBook E410KA.
+
+### Teste físico obrigatório — Galaxy A16 e ASUS VivoBook E410KA
+
+- [ ] Descoberta na mesma rede Wi-Fi.
+- [ ] Descoberta via hotspot do Galaxy A16.
+- [ ] Bloqueio quando a fingerprint TLS diverge.
+- [ ] Rejeição de código incorreto ou expirado.
+- [ ] Envio de fotos, vídeos, PDF, DOCX/XLSX, ZIP e ficheiro vazio.
+- [ ] Interrupção a meio e retoma a partir do offset confirmado.
+- [ ] Cancelamento e remoção dos .part dessa transferência.
+- [ ] Comparação SHA-256 da origem e do destino.
+- [ ] Medição da RAM e teste com ficheiros grandes no ASUS.
