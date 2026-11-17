@@ -36,3 +36,10 @@ jobs:
       - name: Build Android debug APK
         working-directory: android
         run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xtransfer-offline-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
