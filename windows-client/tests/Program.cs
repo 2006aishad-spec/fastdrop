@@ -18,6 +18,9 @@ static class Test
         await RejectsTraversalAsync();
         await WritesAndVerifiesFileAsync();
         await ResumesExistingPartAsync();
+        await RejectsInvalidChunkAndOffsetAsync();
+        await DiscardsOversizedResumeFileAsync();
+        await RejectsCaseInsensitiveDuplicateIdsAsync();
         await ReadsFrameAndPayloadWithoutLossAsync();
         PairingIsSingleUseAndDeviceBound();
         await ServerTransfersFileOverPinnedTlsAsync();
@@ -82,6 +85,68 @@ static class Test
             Assert(resumed.GetResumeOffset("file-1") == first.Length, "offset de retoma incorreto");
             await resumed.WriteChunkAsync("file-1", first.Length, content[first.Length..], Convert.ToHexString(SHA256.HashData(content[first.Length..])).ToLowerInvariant());
             await resumed.FinishFileAsync("file-1", hash);
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+
+    private static async Task RejectsInvalidChunkAndOffsetAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-invalid-chunk-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var content = System.Text.Encoding.UTF8.GetBytes("valid");
+            var hash = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+            var manifest = new TransferManifest("session-invalid", "android-test", new[]
+            {
+                new ManifestEntry("file-1", "valid.bin", content.Length, "document", hash),
+            });
+            var session = new TransferSession(new TransferStore());
+            await session.AcceptManifestAsync(manifest, root);
+            await AssertThrowsAsync<InvalidDataException>(() =>
+                session.WriteChunkAsync("file-1", 1, content, hash));
+            await AssertThrowsAsync<InvalidDataException>(() =>
+                session.WriteChunkAsync("file-1", 0, ReadOnlyMemory<byte>.Empty, hash));
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task DiscardsOversizedResumeFileAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-oversized-part-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var content = System.Text.Encoding.UTF8.GetBytes("four");
+            var hash = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+            var manifest = new TransferManifest("session-oversized", "android-test", new[]
+            {
+                new ManifestEntry("file-1", "small.bin", content.Length, "document", hash),
+            });
+            var session = new TransferSession(new TransferStore());
+            await session.AcceptManifestAsync(manifest, root);
+            var part = Path.Combine(session.SessionFolder!, "file-1.part");
+            await File.WriteAllBytesAsync(part, new byte[content.Length + 10]);
+            Assert(session.GetResumeOffset("file-1") == 0, "ficheiro .part maior que o manifesto não foi reiniciado");
+            Assert(!File.Exists(part), "ficheiro .part inválido permaneceu no destino");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task RejectsCaseInsensitiveDuplicateIdsAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-duplicate-id-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var manifest = new TransferManifest("session-duplicate", "android-test", new[]
+            {
+                new ManifestEntry("file-a", "one.bin", 1, "document", new string('0', 64)),
+                new ManifestEntry("FILE-A", "two.bin", 1, "document", new string('0', 64)),
+            });
+            var session = new TransferSession(new TransferStore());
+            await AssertThrowsAsync<InvalidDataException>(() => session.AcceptManifestAsync(manifest, root));
             Pass();
         }
         finally { TryDelete(root); }
