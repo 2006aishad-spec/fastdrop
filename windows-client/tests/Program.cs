@@ -19,6 +19,7 @@ static class Test
         await RejectsTraversalAsync();
         await WritesAndVerifiesFileAsync();
         await ResumesExistingPartAsync();
+        await ResumesAcrossFreshPairSessionsAsync();
         await RejectsInvalidChunkAndOffsetAsync();
         await DiscardsOversizedResumeFileAsync();
         await RejectsCaseInsensitiveDuplicateIdsAsync();
@@ -92,6 +93,43 @@ static class Test
         finally { TryDelete(root); }
     }
 
+
+    private static async Task ResumesAcrossFreshPairSessionsAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-cross-session-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var content = System.Text.Encoding.UTF8.GetBytes("resume after a new pairing");
+            var hash = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+            const string transferId = "stable-transfer-001";
+            var firstManifest = new TransferManifest("pair-session-one", "android-test", new[]
+            {
+                new ManifestEntry("file-1", "resume.bin", content.Length, "document", hash),
+            }, transferId);
+            var first = new TransferSession(new TransferStore());
+            await first.AcceptManifestAsync(firstManifest, root);
+            var partial = content[..9];
+            await first.WriteChunkAsync("file-1", 0, partial,
+                Convert.ToHexString(SHA256.HashData(partial)).ToLowerInvariant());
+
+            var secondManifest = new TransferManifest("pair-session-two", "android-test", new[]
+            {
+                new ManifestEntry("file-1", "resume.bin", content.Length, "document", hash),
+            }, transferId);
+            var second = new TransferSession(new TransferStore());
+            await second.AcceptManifestAsync(secondManifest, root);
+            Assert(second.GetResumeOffset("file-1") == partial.Length,
+                "o offset não foi conservado após novo emparelhamento TLS");
+            var remaining = content[partial.Length..];
+            await second.WriteChunkAsync("file-1", partial.Length, remaining,
+                Convert.ToHexString(SHA256.HashData(remaining)).ToLowerInvariant());
+            var final = await second.FinishFileAsync("file-1", hash);
+            Assert(File.ReadAllBytes(final).SequenceEqual(content),
+                "conteúdo final divergente após retoma entre sessões");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
 
     private static async Task RejectsInvalidChunkAndOffsetAsync()
     {
