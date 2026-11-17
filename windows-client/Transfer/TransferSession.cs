@@ -69,6 +69,7 @@ public sealed class TransferSession
         var entry = GetEntry(fileId);
         if (!string.Equals(entry.Sha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Checksum final não corresponde ao manifesto.");
         var part = GetPartPath(entry);
+        if (entry.Size == 0 && !File.Exists(part)) await File.WriteAllBytesAsync(part, Array.Empty<byte>(), cancellationToken);
         if (!File.Exists(part) || new FileInfo(part).Length != entry.Size) throw new InvalidDataException("O ficheiro incompleto não pode ser finalizado.");
         string actual;
         await using (var stream = File.OpenRead(part))
