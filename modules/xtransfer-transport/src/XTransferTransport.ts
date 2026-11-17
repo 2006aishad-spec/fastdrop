@@ -91,5 +91,6 @@ export async function cancelTransfer(): Promise<boolean> {
 export function addTransferProgressListener(
   listener: (event: TransferProgressEvent) => void,
 ): { remove: () => void } {
+  if (Platform.OS !== "android") return { remove: () => undefined };
   return getNativeModule().addListener("onTransferProgress", listener);
 }
