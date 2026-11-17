@@ -14,7 +14,7 @@ namespace FastDrop.Windows.Networking;
 
 public sealed class LocalTransferServer : IAsyncDisposable
 {
-    private readonly TcpListener _listener = new(IPAddress.Any, Fd01Protocol.TransferPort);
+    private readonly TcpListener _listener;
     private readonly PairingService _pairing;
     private readonly TransferStore _store;
     private readonly Func<string> _destination;
@@ -25,13 +25,16 @@ public sealed class LocalTransferServer : IAsyncDisposable
     private CancellationTokenSource? _cancellation;
     private Task? _acceptLoop;
 
-    public LocalTransferServer(PairingService pairing, TransferStore store, Func<string> destination, X509Certificate2 certificate)
+    public LocalTransferServer(PairingService pairing, TransferStore store, Func<string> destination, X509Certificate2 certificate, int transferPort = Fd01Protocol.TransferPort)
     {
+        _listener = new TcpListener(IPAddress.Any, transferPort);
         _pairing = pairing;
         _store = store;
         _destination = destination;
         _certificate = certificate;
     }
+
+    public int Port => _listener.LocalEndpoint is IPEndPoint endpoint ? endpoint.Port : throw new InvalidOperationException("Listener not started.");
 
     public event Action<string>? StatusChanged;
 
