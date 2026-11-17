@@ -24,6 +24,7 @@ static class Test
         await RejectsCaseInsensitiveDuplicateIdsAsync();
         await ReadsFrameAndPayloadWithoutLossAsync();
         PairingIsSingleUseAndDeviceBound();
+        PairingRateLimitAppliesAcrossDeviceIds();
         await ServerTransfersFileOverPinnedTlsAsync();
         Console.WriteLine($"PASS: {_passed} testes FD/01");
     }
@@ -183,6 +184,22 @@ static class Test
         Pass();
     }
 
+
+
+    private static void PairingRateLimitAppliesAcrossDeviceIds()
+    {
+        var pairing = new PairingService();
+        for (var i = 0; i < 5; i++)
+        {
+            var request = new PairRequest($"attacker-{i}", "!!!!!!", $"nonce-{i}");
+            Assert(!pairing.TryPair(request, out _), "código incorreto foi aceite");
+        }
+
+        var validCodeFromDifferentDevice = new PairRequest("new-device", pairing.CurrentCode, "nonce-valid");
+        Assert(!pairing.TryPair(validCodeFromDifferentDevice, out _),
+            "limite global foi contornado mudando o deviceId");
+        Pass();
+    }
 
     private static async Task ServerTransfersFileOverPinnedTlsAsync()
     {
