@@ -101,6 +101,9 @@ static class Test
         var request = new PairRequest("android-a", pairing.CurrentCode, "nonce-a");
         Assert(pairing.TryPair(request, out var response), "emparelhamento válido rejeitado");
         Assert(response.Token is not null, "token não criado");
+        Assert(!pairing.TryPair(new PairRequest("android-b", pairing.CurrentCode, "nonce-b"), out _),
+            "o mesmo código aceitou um segundo dispositivo");
+        Assert(pairing.IsDeviceForSession(response.SessionId, "android-a"), "segundo dispositivo substituiu o primeiro");
         Assert(pairing.Authorize(new PairAuth(response.SessionId, response.Token!)), "token válido rejeitado");
         Assert(!pairing.Authorize(new PairAuth(response.SessionId, response.Token!)), "token reutilizado aceite");
         Assert(pairing.IsDeviceForSession(response.SessionId, "android-a"), "dispositivo não associado");
