@@ -19,19 +19,19 @@
 ## Seleção e transferência
 
 - [x] O fluxo suporta visualmente seleção múltipla de imagens, vídeos, documentos Excel, ZIP, outros arquivos e aplicações que o Android permita partilhar.
-- [x] O painel de transferência mostra progresso por ficheiro e no total, velocidade atual e estimativa de tempo restante.
+- [x] O painel mostra o ficheiro atual, bytes confirmados, total e percentagem real recebida do módulo nativo; velocidade e estimativa de tempo ainda não estão implementadas.
 - [x] O utilizador pode pausar, retomar, cancelar e recomeçar uma transferência interrompida ou falhada.
-- [x] A conclusão distingue ficheiros concluídos, falhados e pendentes e comunica verificação de integridade.
+- [x] A conclusão só é indicada após confirmação FILE_COMPLETE e SHA-256 do Windows; a lista detalhada de ficheiros concluídos, falhados e pendentes ainda não está implementada.
 
 ## Memória, privacidade e continuidade
 
-- [x] O produto não exige conta de utilizador para o fluxo local e apresenta histórico local das transferências recentes.
+- [x] O produto não exige conta de utilizador para o fluxo local; o Android guarda apenas a transferência pendente necessária para retoma. Histórico completo ainda não está implementado.
 - [x] O design e a arquitetura evitam enviar ficheiros para a nuvem e deixam explícito que o transporte futuro deve usar streaming/chunks, não carregar tudo em memória.
 - [x] A arquitetura e documentação deixam um protocolo modular preparado para um cliente leve de Windows 10 Home e PCs com 2 GB de RAM.
 
 ## Entrega técnica
 
-- [x] Os ecrãs de Dashboard, Histórico e Definições funcionam no Expo Web Preview e mantêm navegação compatível com React Native.
+- [ ] Revalidar os ecrãs de Dashboard, Histórico e Definições no Expo Web Preview após a integração nativa do XTransfer Offline.
 - [x] Os diagnósticos TypeScript e o lint passam sem erros introduzidos pelo FastDrop.
 - [x] Os ativos de branding nativo foram atualizados para a identidade FastDrop antes do checkpoint.
 
