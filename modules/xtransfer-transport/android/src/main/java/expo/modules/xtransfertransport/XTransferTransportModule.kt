@@ -420,7 +420,7 @@ class XTransferTransportModule : Module() {
       }
     }
     if (total != document.size) throw IllegalStateException("O tamanho de o ficheiro mudou; seleciona o ficheiro novamente.")
-    return digest.digest().joinToString("") { "%02x".format(it) }
+    return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
   }
 
   private fun pinnedTrustManager(expectedFingerprint: String): X509TrustManager = object : X509TrustManager {
@@ -440,7 +440,7 @@ class XTransferTransportModule : Module() {
   }
 
   private fun sha256(bytes: ByteArray): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
   private fun readMessage(input: InputStream): Pair<String, JSONObject> {
     val line = readLine(input)
