@@ -162,6 +162,7 @@ static class Test
                 "ficheiro concluído não foi reconhecido após novo emparelhamento");
             var returnedPath = await second.FinishFileAsync("file-complete", hash);
             Assert(returnedPath == completedPath, "a retoma tentou criar uma cópia duplicada");
+            Assert(second.State == TransferState.Completed, "a sessão não foi marcada como concluída após reconhecer todos os ficheiros");
             Assert(Directory.GetFiles(second.SessionFolder!, "*.bin").Length == 1,
                 "foi criada uma cópia duplicada de um ficheiro já concluído");
             Pass();
