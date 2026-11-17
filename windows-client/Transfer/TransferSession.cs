@@ -9,6 +9,7 @@ public sealed class TransferSession
     private readonly TransferStore _store;
     private readonly Dictionary<string, ManifestEntry> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _finished = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _completedPaths = new(StringComparer.Ordinal);
     private long _declaredBytes;
 
     public TransferSession(TransferStore store) => _store = store;
@@ -30,7 +31,14 @@ public sealed class TransferSession
     {
         var entry = GetEntry(fileId);
         var path = GetPartPath(entry);
-        if (!File.Exists(path)) return 0;
+        if (!File.Exists(path))
+        {
+            var completed = _store.FindCompletedPath(SessionFolder ?? throw new InvalidOperationException(), entry);
+            if (completed is null) return 0;
+            _finished.Add(fileId);
+            _completedPaths[fileId] = completed;
+            return entry.Size;
+        }
         var length = new FileInfo(path).Length;
         if (length > entry.Size)
         {
@@ -67,6 +75,7 @@ public sealed class TransferSession
     {
         if (State != TransferState.Receiving || SessionFolder is null) throw new InvalidOperationException("A sessão não está a receber.");
         var entry = GetEntry(fileId);
+        if (_completedPaths.TryGetValue(fileId, out var completedPath)) return completedPath;
         if (!string.Equals(entry.Sha256, expectedSha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Checksum final não corresponde ao manifesto.");
         var part = GetPartPath(entry);
         if (entry.Size == 0 && !File.Exists(part)) await File.WriteAllBytesAsync(part, Array.Empty<byte>(), cancellationToken);
@@ -80,6 +89,7 @@ public sealed class TransferSession
         var finalPath = _store.GetFinalPath(SessionFolder, entry);
         File.Move(part, finalPath);
         _finished.Add(fileId);
+        _completedPaths[fileId] = finalPath;
         if (_finished.Count == _files.Count) State = TransferState.Completed;
         return finalPath;
     }
