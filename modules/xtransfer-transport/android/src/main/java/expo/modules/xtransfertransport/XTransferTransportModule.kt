@@ -419,7 +419,7 @@ class XTransferTransportModule : Module() {
         digest.update(buffer, 0, read)
       }
     }
-    if (total != document.size) throw IllegalStateException("O tamanho de o ficheiro mudou; seleciona o ficheiro novamente.")
+    if (total != document.size) throw IllegalStateException("O ficheiro mudou de tamanho; seleciona-o novamente.")
     return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
   }
 
