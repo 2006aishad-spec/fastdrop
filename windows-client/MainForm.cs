@@ -58,7 +58,7 @@ public sealed class MainForm : Form
 
         var title = new Label { Text = "Pronto para\nreceber ficheiros.", AutoSize = true, Font = new Font("Segoe UI", 28F, FontStyle.Bold), ForeColor = Color.FromArgb(24, 32, 24), Dock = DockStyle.Fill };
         var orb = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(216, 243, 106), Margin = new Padding(34, 14, 12, 14) };
-        orb.Paint += (_, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var pen = new Pen(Color.FromArgb(24, 32, 24), 4); e.Graphics.DrawArc(new Rectangle(22, 22, 52, 52), 35, 210); e.Graphics.DrawArc(new Rectangle(36, 32, 42, 42), 215, 210); };
+        orb.Paint += (_, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var pen = new Pen(Color.FromArgb(24, 32, 24), 4); e.Graphics.DrawArc(pen, new Rectangle(22, 22, 52, 52), 35, 210); e.Graphics.DrawArc(pen, new Rectangle(36, 32, 42, 42), 215, 210); };
         root.Controls.Add(title, 0, 1); root.Controls.Add(orb, 1, 1);
 
         var card = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18), Margin = new Padding(0, 8, 0, 8), BorderStyle = BorderStyle.FixedSingle };
