@@ -1,5 +1,8 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using FastDrop.Windows.Protocol;
@@ -14,14 +17,17 @@ public sealed class LocalTransferServer : IAsyncDisposable
     private readonly PairingService _pairing;
     private readonly TransferStore _store;
     private readonly Func<string> _destination;
+    private readonly X509Certificate2 _certificate;
+    private readonly SemaphoreSlim _connections = new(2, 2);
     private CancellationTokenSource? _cancellation;
     private Task? _acceptLoop;
 
-    public LocalTransferServer(PairingService pairing, TransferStore store, Func<string> destination)
+    public LocalTransferServer(PairingService pairing, TransferStore store, Func<string> destination, X509Certificate2 certificate)
     {
         _pairing = pairing;
         _store = store;
         _destination = destination;
+        _certificate = certificate;
     }
 
     public event Action<string>? StatusChanged;
@@ -30,9 +36,9 @@ public sealed class LocalTransferServer : IAsyncDisposable
     {
         if (_acceptLoop is not null) return;
         _cancellation = new CancellationTokenSource();
-        _listener.Start(2);
+        _listener.Start(8);
         _acceptLoop = AcceptLoopAsync(_cancellation.Token);
-        StatusChanged?.Invoke($"A escutar localmente na porta {Fd01Protocol.TransferPort}");
+        StatusChanged?.Invoke($"A escutar TLS localmente na porta {Fd01Protocol.TransferPort}");
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -42,6 +48,11 @@ public sealed class LocalTransferServer : IAsyncDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var client = await _listener.AcceptTcpClientAsync(cancellationToken);
+                if (client.Client.RemoteEndPoint is IPEndPoint endpoint && !IsLocalAddress(endpoint.Address))
+                {
+                    client.Dispose();
+                    continue;
+                }
                 _ = HandleClientAsync(client, cancellationToken);
             }
         }
@@ -52,78 +63,92 @@ public sealed class LocalTransferServer : IAsyncDisposable
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken serverCancellation)
     {
-        using (client)
-        using (var connectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellation))
+        await _connections.WaitAsync(serverCancellation);
+        try
         {
-            connectionCancellation.CancelAfter(TimeSpan.FromMinutes(30));
-            var cancellationToken = connectionCancellation.Token;
-            try
+            using (client)
+            using (var connectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellation))
             {
-                client.NoDelay = true;
-                await using var stream = client.GetStream();
-                using var reader = new StreamReader(stream, Encoding.UTF8, false, Fd01Protocol.MaxLineBytes, leaveOpen: true);
-                await using var writer = new StreamWriter(stream, new UTF8Encoding(false), Fd01Protocol.MaxLineBytes, leaveOpen: true) { NewLine = "\n", AutoFlush = true };
-
-                var pair = await ReadMessageAsync<PairRequest>(reader, "PAIR", cancellationToken);
-                if (!_pairing.TryPair(pair, out var pairResponse))
+                connectionCancellation.CancelAfter(TimeSpan.FromMinutes(30));
+                var cancellationToken = connectionCancellation.Token;
+                try
                 {
-                    await WriteMessageAsync(writer, "PAIR_REJECTED", pairResponse, cancellationToken);
-                    return;
-                }
-                await WriteMessageAsync(writer, "PAIR_ACCEPTED", pairResponse, cancellationToken);
+                    client.NoDelay = true;
+                    await using var network = client.GetStream();
+                    await using var tls = new SslStream(network, leaveInnerStreamOpen: false);
+                    await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _certificate,
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                        ClientCertificateRequired = false,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    }, cancellationToken);
+                    var reader = new Fd01Reader(tls);
+                    var writer = new Fd01Writer(tls);
 
-                var auth = await ReadMessageAsync<PairAuth>(reader, "AUTH", cancellationToken);
-                if (!_pairing.Authorize(auth))
-                {
-                    await WriteMessageAsync(writer, "ERROR", new ErrorMessage("Não autorizado."), cancellationToken);
-                    return;
-                }
+                    var pair = await ReadMessageAsync<PairRequest>(reader, "PAIR", cancellationToken);
+                    if (!_pairing.TryPair(pair, out var pairResponse))
+                    {
+                        await writer.WriteMessageAsync("PAIR_REJECTED", pairResponse, cancellationToken);
+                        return;
+                    }
+                    await writer.WriteMessageAsync("PAIR_ACCEPTED", pairResponse, cancellationToken);
 
-                var manifest = await ReadMessageAsync<TransferManifest>(reader, "MANIFEST", cancellationToken);
-                if (!string.Equals(manifest.SessionId, auth.SessionId, StringComparison.Ordinal)) throw new InvalidDataException("Sessão do manifesto divergente.");
-                var session = new TransferSession(_store);
-                await session.AcceptManifestAsync(manifest, _destination(), cancellationToken);
-                await WriteMessageAsync(writer, "MANIFEST_ACCEPTED", new { sessionId = manifest.SessionId }, cancellationToken);
+                    var auth = await ReadMessageAsync<PairAuth>(reader, "AUTH", cancellationToken);
+                    if (!_pairing.Authorize(auth))
+                    {
+                        await writer.WriteMessageAsync("ERROR", new ErrorMessage("Não autorizado ou sessão já utilizada."), cancellationToken);
+                        return;
+                    }
 
-                while (!cancellationToken.IsCancellationRequested && session.State == TransferState.Receiving)
-                {
-                    var command = await ReadLineAsync(reader, cancellationToken);
-                    if (command is null) break;
-                    if (command.StartsWith("FILE_BEGIN ", StringComparison.Ordinal))
+                    var manifest = await ReadMessageAsync<TransferManifest>(reader, "MANIFEST", cancellationToken);
+                    if (!string.Equals(manifest.SessionId, auth.SessionId, StringComparison.Ordinal) || !_pairing.IsDeviceForSession(auth.SessionId, manifest.DeviceId))
+                        throw new InvalidDataException("Sessão ou dispositivo do manifesto divergente.");
+
+                    var session = new TransferSession(_store);
+                    await session.AcceptManifestAsync(manifest, _destination(), cancellationToken);
+                    await writer.WriteMessageAsync("MANIFEST_ACCEPTED", new { sessionId = manifest.SessionId }, cancellationToken);
+
+                    while (!cancellationToken.IsCancellationRequested && session.State == TransferState.Receiving)
                     {
-                        var begin = Deserialize<FileBegin>(command[11..]);
-                        _ = session.GetResumeOffset(begin.FileId);
-                        await WriteMessageAsync(writer, "RESUME", new { fileId = begin.FileId, offset = session.GetResumeOffset(begin.FileId) }, cancellationToken);
+                        var command = await reader.ReadLineAsync(cancellationToken);
+                        if (command is null) break;
+                        if (command.StartsWith("FILE_BEGIN ", StringComparison.Ordinal))
+                        {
+                            var begin = Deserialize<FileBegin>(command[11..]);
+                            await writer.WriteMessageAsync("RESUME", new { fileId = begin.FileId, offset = session.GetResumeOffset(begin.FileId) }, cancellationToken);
+                        }
+                        else if (command.StartsWith("CHUNK ", StringComparison.Ordinal))
+                        {
+                            var header = Deserialize<ChunkHeader>(command[6..]);
+                            if (header.Length <= 0 || header.Length > Fd01Protocol.MaxChunkBytes) throw new InvalidDataException("Tamanho de chunk inválido.");
+                            var bytes = new byte[header.Length];
+                            await reader.ReadExactlyAsync(bytes, cancellationToken);
+                            var next = await session.WriteChunkAsync(header.FileId, header.Offset, bytes, header.Sha256, cancellationToken);
+                            await writer.WriteMessageAsync("ACK", new { fileId = header.FileId, offset = next }, cancellationToken);
+                        }
+                        else if (command.StartsWith("FILE_END ", StringComparison.Ordinal))
+                        {
+                            var end = Deserialize<FileEnd>(command[9..]);
+                            var path = await session.FinishFileAsync(end.FileId, end.Sha256, cancellationToken);
+                            await writer.WriteMessageAsync("FILE_COMPLETE", new { fileId = end.FileId, name = Path.GetFileName(path) }, cancellationToken);
+                        }
+                        else if (command.Equals("CANCEL", StringComparison.Ordinal))
+                        {
+                            session.Cancel();
+                            await writer.WriteMessageAsync("CANCELLED", new { sessionId = manifest.SessionId }, cancellationToken);
+                        }
+                        else throw new InvalidDataException("Comando FD/01 desconhecido.");
                     }
-                    else if (command.StartsWith("CHUNK ", StringComparison.Ordinal))
-                    {
-                        var header = Deserialize<ChunkHeader>(command[6..]);
-                        if (header.Length < 0 || header.Length > Fd01Protocol.MaxChunkBytes) throw new InvalidDataException("Tamanho de chunk inválido.");
-                        var bytes = new byte[header.Length];
-                        await ReadExactlyAsync(stream, bytes, cancellationToken);
-                        var next = await session.WriteChunkAsync(header.FileId, header.Offset, bytes, header.Sha256, cancellationToken);
-                        await WriteMessageAsync(writer, "ACK", new { fileId = header.FileId, offset = next }, cancellationToken);
-                    }
-                    else if (command.StartsWith("FILE_END ", StringComparison.Ordinal))
-                    {
-                        var end = Deserialize<FileEnd>(command[9..]);
-                        var path = await session.FinishFileAsync(end.FileId, end.Sha256, cancellationToken);
-                        await WriteMessageAsync(writer, "FILE_COMPLETE", new { fileId = end.FileId, name = Path.GetFileName(path) }, cancellationToken);
-                    }
-                    else if (command.Equals("CANCEL", StringComparison.Ordinal))
-                    {
-                        session.Cancel();
-                        await WriteMessageAsync(writer, "CANCELLED", new { sessionId = manifest.SessionId }, cancellationToken);
-                    }
-                    else throw new InvalidDataException("Comando FD/01 desconhecido.");
+                    StatusChanged?.Invoke($"Sessão {manifest.SessionId} terminou em {session.State}.");
                 }
-                StatusChanged?.Invoke($"Sessão {manifest.SessionId} terminou em {session.State}.");
+                catch (OperationCanceledException) { StatusChanged?.Invoke("Ligação cancelada ou expirada."); }
+                catch (IOException) { StatusChanged?.Invoke("Ligação encerrada durante a transferência."); }
+                catch (JsonException) { StatusChanged?.Invoke("Mensagem JSON inválida rejeitada."); }
+                catch (Exception ex) { StatusChanged?.Invoke($"Transferência rejeitada: {ex.Message}"); }
             }
-            catch (OperationCanceledException) { StatusChanged?.Invoke("Ligação cancelada ou expirada."); }
-            catch (IOException) { StatusChanged?.Invoke("Ligação encerrada durante a transferência."); }
-            catch (JsonException) { await TryWriteErrorAsync(client, "Mensagem JSON inválida."); }
-            catch (Exception ex) { StatusChanged?.Invoke($"Transferência rejeitada: {ex.Message}"); await TryWriteErrorAsync(client, "Pedido inválido ou transferência rejeitada."); }
         }
+        finally { _connections.Release(); }
     }
 
     public async ValueTask DisposeAsync()
@@ -131,54 +156,29 @@ public sealed class LocalTransferServer : IAsyncDisposable
         if (_cancellation is null) return;
         _cancellation.Cancel();
         _listener.Stop();
-        if (_acceptLoop is not null) { try { await _acceptLoop; } catch (OperationCanceledException) { } }
+        try { if (_acceptLoop is not null) await _acceptLoop; } catch (OperationCanceledException) { }
+        _connections.Dispose();
         _cancellation.Dispose();
     }
 
-    private static async Task<string?> ReadLineAsync(StreamReader reader, CancellationToken cancellationToken)
+    private static async Task<T> ReadMessageAsync<T>(Fd01Reader reader, string command, CancellationToken cancellationToken)
     {
-        var line = await reader.ReadLineAsync(cancellationToken);
-        if (line is not null && Encoding.UTF8.GetByteCount(line) > Fd01Protocol.MaxLineBytes)
-            throw new InvalidDataException("Mensagem de controlo demasiado grande.");
-        return line;
-    }
-
-    private static async Task<T> ReadMessageAsync<T>(StreamReader reader, string command, CancellationToken cancellationToken)
-    {
-        var line = await ReadLineAsync(reader, cancellationToken) ?? throw new EndOfStreamException();
+        var line = await reader.ReadLineAsync(cancellationToken) ?? throw new EndOfStreamException();
         if (!line.StartsWith(command + " ", StringComparison.Ordinal)) throw new InvalidDataException($"Esperado {command}.");
         return Deserialize<T>(line[(command.Length + 1)..]);
     }
 
     private static T Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, Fd01Protocol.JsonOptions) ?? throw new JsonException("Mensagem vazia.");
 
-    private static async Task WriteMessageAsync<T>(StreamWriter writer, string command, T value, CancellationToken cancellationToken)
+    private static bool IsLocalAddress(IPAddress address)
     {
-        var json = JsonSerializer.Serialize(value, Fd01Protocol.JsonOptions);
-        if (Encoding.UTF8.GetByteCount(json) > Fd01Protocol.MaxLineBytes) throw new InvalidDataException("Mensagem demasiado grande.");
-        await writer.WriteLineAsync(command + " " + json, cancellationToken);
-    }
-
-    private static async Task ReadExactlyAsync(NetworkStream stream, byte[] buffer, CancellationToken cancellationToken)
-    {
-        var read = 0;
-        while (read < buffer.Length)
+        if (IPAddress.IsLoopback(address)) return true;
+        if (address.AddressFamily == AddressFamily.InterNetwork)
         {
-            var count = await stream.ReadAsync(buffer.AsMemory(read), cancellationToken);
-            if (count == 0) throw new EndOfStreamException();
-            read += count;
+            var bytes = address.GetAddressBytes();
+            return bytes[0] == 10 || (bytes[0] == 172 && bytes[1] is >= 16 and <= 31) || (bytes[0] == 192 && bytes[1] == 168);
         }
-    }
-
-    private static async Task TryWriteErrorAsync(TcpClient client, string message)
-    {
-        try
-        {
-            await using var stream = client.GetStream();
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false), 256, leaveOpen: true) { NewLine = "\n", AutoFlush = true };
-            await WriteMessageAsync(writer, "ERROR", new ErrorMessage(message), CancellationToken.None);
-        }
-        catch { }
+        return address.IsIPv6LinkLocal || address.IsIPv6UniqueLocal;
     }
 }
 

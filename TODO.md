@@ -56,3 +56,15 @@
 - [ ] Executar os testes C# num ambiente com .NET 8 SDK.
 - [ ] Implementar cliente Android correspondente antes de declarar transferência real entre dispositivos.
 - [ ] Adicionar TLS ou mecanismo equivalente de associação criptográfica antes de declarar o canal protegido.
+
+## Fase 2.1 — correção e validação
+
+- [x] Corrigido o erro de compilação em `RegisterFailure`.
+- [x] Substituído o framing misto por `Fd01Reader`/`Fd01Writer` sobre um único `Stream` TLS.
+- [x] Tornado o ticket de emparelhamento de utilização única e associado ao `deviceId` do manifesto.
+- [x] Adicionado TLS 1.2/1.3 com certificado local e impressão digital para pinning.
+- [x] Limitadas ligações a endereços locais/privados e limitado o número de ligações simultâneas.
+- [x] Acrescentados testes de framing sem perda de bytes e token reutilizado.
+- [x] Criado workflow Windows/.NET 8 para restore, build, testes e publicação do EXE.
+- [ ] Executar e obter resultado verde do workflow Windows; este ambiente não tem .NET SDK.
+- [ ] Não iniciar a integração Android antes do build e dos testes Windows passarem.

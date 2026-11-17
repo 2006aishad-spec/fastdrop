@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using FastDrop.Windows.Networking;
 using FastDrop.Windows.Protocol;
 using FastDrop.Windows.Storage;
 using FastDrop.Windows.Transfer;
@@ -12,6 +13,8 @@ static class Test
         await RejectsTraversalAsync();
         await WritesAndVerifiesFileAsync();
         await ResumesExistingPartAsync();
+        await ReadsFrameAndPayloadWithoutLossAsync();
+        PairingIsSingleUseAndDeviceBound();
         Console.WriteLine($"PASS: {_passed} testes FD/01");
     }
 
@@ -76,6 +79,33 @@ static class Test
             Pass();
         }
         finally { TryDelete(root); }
+    }
+
+    private static async Task ReadsFrameAndPayloadWithoutLossAsync()
+    {
+        var payload = System.Text.Encoding.UTF8.GetBytes("bytes-do-ficheiro");
+        var frame = System.Text.Encoding.UTF8.GetBytes("CHUNK {\"length\":17}\n");
+        await using var stream = new MemoryStream(frame.Concat(payload).ToArray());
+        var reader = new Fd01Reader(stream);
+        var line = await reader.ReadLineAsync(CancellationToken.None);
+        var received = new byte[payload.Length];
+        await reader.ReadExactlyAsync(received, CancellationToken.None);
+        Assert(line == "CHUNK {\"length\":17}", "framing alterou a linha");
+        Assert(received.SequenceEqual(payload), "framing perdeu bytes do payload");
+        Pass();
+    }
+
+    private static void PairingIsSingleUseAndDeviceBound()
+    {
+        var pairing = new PairingService();
+        var request = new PairRequest("android-a", pairing.CurrentCode, "nonce-a");
+        Assert(pairing.TryPair(request, out var response), "emparelhamento válido rejeitado");
+        Assert(response.Token is not null, "token não criado");
+        Assert(pairing.Authorize(new PairAuth(response.SessionId, response.Token!)), "token válido rejeitado");
+        Assert(!pairing.Authorize(new PairAuth(response.SessionId, response.Token!)), "token reutilizado aceite");
+        Assert(pairing.IsDeviceForSession(response.SessionId, "android-a"), "dispositivo não associado");
+        Assert(!pairing.IsDeviceForSession(response.SessionId, "android-b"), "dispositivo divergente associado");
+        Pass();
     }
 
     private static async Task AssertThrowsAsync<T>(Func<Task> action) where T : Exception

@@ -9,6 +9,7 @@ public sealed class MainForm : Form
 {
     private readonly LocalDiscoveryService _discovery;
     private readonly PairingService _pairing = new();
+    private readonly LocalTlsCertificate _tls;
     private readonly LocalTransferServer _transferServer;
     private readonly TransferStore _store = new();
     private readonly Label _statusLabel = new();
@@ -29,8 +30,9 @@ public sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
 
-        _discovery = new LocalDiscoveryService(Environment.MachineName);
-        _transferServer = new LocalTransferServer(_pairing, _store, () => _destination);
+        _tls = new LocalTlsCertificate();
+        _discovery = new LocalDiscoveryService(Environment.MachineName, _tls.Sha256Fingerprint);
+        _transferServer = new LocalTransferServer(_pairing, _store, () => _destination, _tls.Certificate);
         _discovery.AnnouncementSent += announcement => BeginInvoke(() => SetOnlineState(announcement));
         _transferServer.StatusChanged += status => BeginInvoke(() => SetServerState(status));
         BuildUi();
@@ -80,7 +82,7 @@ public sealed class MainForm : Form
     private void SetOnlineState(DiscoveryAnnouncement announcement)
     {
         _statusLabel.Text = "Este PC está pronto";
-        _detailLabel.Text = $"A aguardar ligação local · {announcement.ProtocolVersion} · porta {announcement.TransferPort} · código {_pairing.CurrentCode}";
+        _detailLabel.Text = $"A aguardar TLS local · {announcement.ProtocolVersion} · porta {announcement.TransferPort} · código {_pairing.CurrentCode}";
         _statusOrb.BackColor = Color.FromArgb(216, 243, 106);
     }
 

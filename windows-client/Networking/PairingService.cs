@@ -11,6 +11,7 @@ public sealed class PairingService
     private readonly TimeSpan _ticketLifetime = TimeSpan.FromMinutes(5);
     private readonly Dictionary<string, (int Failures, DateTimeOffset BlockedUntil)> _failures = new();
     private PairingTicket? _ticket;
+    private bool _consumed;
 
     public string CurrentCode
     {
@@ -30,6 +31,7 @@ public sealed class PairingService
             var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
             _ticket = new PairingTicket(deviceId, sessionId, token, DateTimeOffset.UtcNow + _ticketLifetime);
             _ticket = _ticket with { TokenCode = CreateCode() };
+            _consumed = false;
             _failures.Clear();
         }
     }
@@ -80,11 +82,22 @@ public sealed class PairingService
     {
         lock (_gate)
         {
-            if (_ticket is null || DateTimeOffset.UtcNow >= _ticket.ExpiresAt) return false;
+            if (_ticket is null || _consumed || DateTimeOffset.UtcNow >= _ticket.ExpiresAt) return false;
             if (!string.Equals(auth.SessionId, _ticket.SessionId, StringComparison.Ordinal)) return false;
             var expected = Encoding.UTF8.GetBytes(_ticket.Token);
             var actual = Encoding.UTF8.GetBytes(auth.Token ?? "");
-            return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
+            var valid = actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
+            if (valid) _consumed = true;
+            return valid;
+        }
+    }
+
+    public bool IsDeviceForSession(string sessionId, string deviceId)
+    {
+        lock (_gate)
+        {
+            return _ticket is not null && string.Equals(_ticket.SessionId, sessionId, StringComparison.Ordinal) &&
+                   string.Equals(_ticket.DeviceId, deviceId, StringComparison.Ordinal);
         }
     }
 
@@ -96,7 +109,6 @@ public sealed class PairingService
             var failures = current.Failures + 1;
             _failures[deviceId] = (failures, failures >= 5 ? DateTimeOffset.UtcNow.AddMinutes(1) : DateTimeOffset.MinValue);
         }
-        return false;
     }
 
     private static string CreateCode()

@@ -31,7 +31,8 @@ public sealed record DiscoveryAnnouncement(
     string Platform,
     string ProtocolVersion,
     string Nonce,
-    int TransferPort);
+    int TransferPort,
+    string? CertificateSha256 = null);
 
 public sealed record PairRequest(string DeviceId, string Code, string Nonce);
 
