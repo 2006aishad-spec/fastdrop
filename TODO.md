@@ -41,7 +41,7 @@
 - [x] O cliente anuncia o PC na rede local com a versão e porta do protocolo FD/01 e apresenta um estado claro de espera.
 - [x] O utilizador pode escolher a pasta onde os ficheiros recebidos serão guardados.
 - [x] A camada de sessão grava manifestos, escreve chunks por offset e verifica SHA-256 sem carregar o ficheiro inteiro em memória.
-- [ ] Ligar o listener HTTP local na porta FD/01 e o emparelhamento com confirmação visual de seis caracteres.
+- [x] Ligar o listener TCP local na porta FD/01 e o emparelhamento com código temporário de seis caracteres.
 - [ ] Ligar o envio real do Android ao manifesto, chunks, retomada e confirmação de integridade do cliente Windows.
 - [ ] Compilar e testar o executável publicado num PC Windows 10 Home x64 e validar o comportamento numa máquina com 2 GB de RAM.
 
@@ -53,18 +53,27 @@
 - [x] Escrita streaming em `.part`, ACK por chunk, retoma e finalização após hash completo.
 - [x] Tratamento de cancelamento, timeout, desconexão e erros sem marcar falsos sucessos.
 - [x] Criado projeto de testes automatizados sem dependências externas.
-- [ ] Executar os testes C# num ambiente com .NET 8 SDK.
+- [x] Executar build e testes C# no GitHub Actions com Windows Server e .NET 8.
+- [x] Adicionar TLS 1.2/1.3 no listener Windows, certificado local persistente e fingerprint anunciada para pinning.
 - [ ] Implementar cliente Android correspondente antes de declarar transferência real entre dispositivos.
-- [ ] Adicionar TLS ou mecanismo equivalente de associação criptográfica antes de declarar o canal protegido.
+- [ ] Validar pinning TLS no cliente Android e concluir teste real Android ↔ Windows.
 
 ## Fase 2.1 — correção e validação
 
-- [x] Corrigido o erro de compilação em `RegisterFailure`.
-- [x] Substituído o framing misto por `Fd01Reader`/`Fd01Writer` sobre um único `Stream` TLS.
-- [x] Tornado o ticket de emparelhamento de utilização única e associado ao `deviceId` do manifesto.
-- [x] Adicionado TLS 1.2/1.3 com certificado local e impressão digital para pinning.
-- [x] Limitadas ligações a endereços locais/privados e limitado o número de ligações simultâneas.
-- [x] Acrescentados testes de framing sem perda de bytes e token reutilizado.
-- [x] Criado workflow Windows/.NET 8 para restore, build, testes e publicação do EXE.
-- [ ] Executar e obter resultado verde do workflow Windows; este ambiente não tem .NET SDK.
-- [ ] Não iniciar a integração Android antes do build e dos testes Windows passarem.
+- [x] Corrigida a compilação WinForms: os arcos gráficos do indicador de estado agora recebem a caneta Pen obrigatória.
+- [x] Substituído o framing misto por Fd01Reader/Fd01Writer sobre um único stream TLS, sem buffering concorrente.
+- [x] Tornado o código de emparelhamento de utilização única, associado ao deviceId do manifesto e renovado após handshake concluído ou abandonado.
+- [x] Adicionado bloqueio temporário por dispositivo e limite global de tentativas para impedir contorno por troca de deviceId.
+- [x] Adicionado TLS 1.2/1.3 com certificado PFX local persistente e fingerprint SHA-256 para pinning do cliente.
+- [x] Limitadas ligações a endereços locais/privados; máximo de duas ligações simultâneas; timeout curto de handshake e drenagem de ligações no encerramento.
+- [x] Corrigida a finalização para fechar o stream .part antes de renomear o ficheiro no Windows.
+- [x] Reforçada validação de chunks vazios, offsets, ficheiros .part oversized e IDs duplicados sem distinção de maiúsculas/minúsculas.
+- [x] Acrescentados testes de framing, emparelhamento reutilizado, limite global, traversal, integridade, retoma e casos inválidos.
+- [x] Criado teste de integração TCP/TLS que emparelha um cliente de teste e transfere um ficheiro completo com ACK e SHA-256.
+- [x] Workflow Windows/.NET 8 configurado para restore, build, testes e publicação do EXE win-x64.
+- [x] Build, testes de protocolo, integração TLS e publicação win-x64 passaram numa execução do GitHub Actions no commit bb246ddef0d7378bc35443804ad4c077dca7cf8a.
+- [ ] Revalidar o mesmo pipeline após os últimos reforços de limite global de tentativas e renovação condicional do ticket.
+- [ ] Implementar regra de Firewall do Windows com escopo restrito à rede local; requer validação de permissões e comportamento em Windows 10.
+- [ ] Implementar cliente Android correspondente, validação do fingerprint TLS e transferência real entre dispositivos.
+- [ ] Testar no Samsung Galaxy A16 e ASUS VivoBook E410KA, incluindo hotspot e perda de ligação.
+- [ ] Medir consumo e estabilidade numa máquina Windows com 2 GB de RAM.
