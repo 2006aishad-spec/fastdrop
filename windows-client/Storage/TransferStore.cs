@@ -27,6 +27,29 @@ public sealed class TransferStore
 
     public string GetPartPath(string sessionFolder, ManifestEntry entry) => Path.Combine(sessionFolder, entry.FileId + ".part");
 
+    public string? FindCompletedPath(string sessionFolder, ManifestEntry entry)
+    {
+        var safeName = ValidateFileName(entry.Name);
+        var baseName = Path.GetFileNameWithoutExtension(safeName);
+        var extension = Path.GetExtension(safeName);
+        for (var i = 0; i < 10_000; i++)
+        {
+            var candidate = i == 0
+                ? Path.Combine(sessionFolder, safeName)
+                : Path.Combine(sessionFolder, $"{baseName} ({i}){extension}");
+            if (!File.Exists(candidate)) continue;
+            var info = new FileInfo(candidate);
+            if (info.Length != entry.Size) continue;
+            using var stream = File.OpenRead(candidate);
+            var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+            var expected = entry.Sha256.ToUpperInvariant();
+            if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(actual), Convert.FromHexString(expected)))
+                return candidate;
+        }
+        return null;
+    }
+
     public string GetFinalPath(string sessionFolder, ManifestEntry entry)
     {
         var safeName = ValidateFileName(entry.Name);
