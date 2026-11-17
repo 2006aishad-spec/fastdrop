@@ -82,6 +82,7 @@ public sealed class LocalTransferServer : IAsyncDisposable
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken serverCancellation)
     {
+        string? reservedSessionId = null;
         try
         {
             using (client)
@@ -110,11 +111,14 @@ public sealed class LocalTransferServer : IAsyncDisposable
                         await writer.WriteMessageAsync("PAIR_REJECTED", pairResponse, cancellationToken);
                         return;
                     }
+                    reservedSessionId = pairResponse.SessionId;
                     await writer.WriteMessageAsync("PAIR_ACCEPTED", pairResponse, cancellationToken);
 
                     var auth = await ReadMessageAsync<PairAuth>(reader, "AUTH", cancellationToken);
                     if (!_pairing.Authorize(auth))
                     {
+                        _pairing.RotateIfCurrentSession(auth.SessionId);
+                        reservedSessionId = null;
                         await writer.WriteMessageAsync("ERROR", new ErrorMessage("Não autorizado ou sessão já utilizada."), cancellationToken);
                         return;
                     }
@@ -125,7 +129,8 @@ public sealed class LocalTransferServer : IAsyncDisposable
 
                     // The authenticated device has consumed this code. Rotate now so the next device
                     // gets a fresh one-time code while this transfer continues independently.
-                    _pairing.Rotate("pending");
+                    _pairing.RotateIfCurrentSession(manifest.SessionId);
+                    reservedSessionId = null;
                     StatusChanged?.Invoke("Emparelhamento aceite. Novo código disponível.");
 
                     connectionCancellation.CancelAfter(TimeSpan.FromMinutes(30));
@@ -166,10 +171,26 @@ public sealed class LocalTransferServer : IAsyncDisposable
                     }
                     StatusChanged?.Invoke($"Sessão {manifest.SessionId} terminou em {session.State}.");
                 }
-                catch (OperationCanceledException) { StatusChanged?.Invoke("Ligação cancelada ou expirada."); }
-                catch (IOException) { StatusChanged?.Invoke("Ligação encerrada durante a transferência."); }
-                catch (JsonException) { StatusChanged?.Invoke("Mensagem JSON inválida rejeitada."); }
-                catch (Exception ex) { StatusChanged?.Invoke($"Transferência rejeitada: {ex.Message}"); }
+                catch (OperationCanceledException)
+                {
+                    if (reservedSessionId is not null) _pairing.RotateIfCurrentSession(reservedSessionId);
+                    StatusChanged?.Invoke("Ligação cancelada ou expirada.");
+                }
+                catch (IOException)
+                {
+                    if (reservedSessionId is not null) _pairing.RotateIfCurrentSession(reservedSessionId);
+                    StatusChanged?.Invoke("Ligação encerrada durante a transferência.");
+                }
+                catch (JsonException)
+                {
+                    if (reservedSessionId is not null) _pairing.RotateIfCurrentSession(reservedSessionId);
+                    StatusChanged?.Invoke("Mensagem JSON inválida rejeitada.");
+                }
+                catch (Exception ex)
+                {
+                    if (reservedSessionId is not null) _pairing.RotateIfCurrentSession(reservedSessionId);
+                    StatusChanged?.Invoke($"Transferência rejeitada: {ex.Message}");
+                }
             }
         }
         finally { _connections.Release(); }
