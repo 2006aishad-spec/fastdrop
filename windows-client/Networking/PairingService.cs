@@ -10,6 +10,8 @@ public sealed class PairingService
     private readonly object _gate = new();
     private readonly TimeSpan _ticketLifetime = TimeSpan.FromMinutes(5);
     private readonly Dictionary<string, (int Failures, DateTimeOffset BlockedUntil)> _failures = new();
+    private int _globalFailures;
+    private DateTimeOffset _globalBlockedUntil;
     private PairingTicket? _ticket;
     private bool _consumed;
     private bool _pairIssued;
@@ -47,6 +49,8 @@ public sealed class PairingService
         _consumed = false;
         _pairIssued = false;
         _failures.Clear();
+        _globalFailures = 0;
+        _globalBlockedUntil = DateTimeOffset.MinValue;
     }
 
     public bool TryPair(PairRequest request, out PairResponse response)
@@ -63,6 +67,12 @@ public sealed class PairingService
             if (_pairIssued)
             {
                 response = response with { Message = "Este código já foi utilizado. Gera um novo código." };
+                return false;
+            }
+
+            if (_globalBlockedUntil > DateTimeOffset.UtcNow)
+            {
+                response = response with { Message = "Muitas tentativas na rede local. Aguarda antes de tentar novamente." };
                 return false;
             }
 
@@ -123,6 +133,13 @@ public sealed class PairingService
 
     private void RegisterFailure(string deviceId)
     {
+        _globalFailures++;
+        if (_globalFailures >= 5)
+        {
+            _globalBlockedUntil = DateTimeOffset.UtcNow.AddMinutes(1);
+            _globalFailures = 0;
+        }
+
         if (!string.IsNullOrWhiteSpace(deviceId))
         {
             _failures.TryGetValue(deviceId, out var current);
