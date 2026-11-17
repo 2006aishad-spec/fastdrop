@@ -1,5 +1,15 @@
 # FastDrop — resultados
 
+> O nome de produto pretendido passou a ser **XTransfer Offline**. FastDrop permanece como nome técnico do projeto até a migração de branding ser validada.
+
+## Fase 1 — auditoria e preparação
+
+- [x] Criada a branch `development/xtransfer-offline` antes de alterações de código.
+- [x] Registada a auditoria em `docs/PHASE1-AUDIT.md`.
+- [x] Confirmado que o Figma fornecido não ficou inspecionável no navegador sandbox; nenhuma importação foi alegada.
+- [x] Separadas as funcionalidades demonstrativas das funcionalidades reais.
+- [ ] Disponibilizar export ou acesso funcional do Figma para inspeção dos frames finais.
+
 ## Dashboard móvel offline-first
 
 - [x] A primeira versão é uma aplicação móvel Android leve, preparada para transferir ficheiros entre telemóvel e PC Windows 10 Home ou outros computadores compatíveis.
