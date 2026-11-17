@@ -50,10 +50,27 @@ O executável autónomo ficará em `publish\win-x64\`. Para Windows x86, utilize
 
 ## Testes automatizados
 
-O projeto separado em `tests\FastDrop.Protocol.Tests.csproj` valida rejeição de traversal, gravação e SHA-256, além de retoma a partir de `.part`:
+O projeto separado em `tests\FastDrop.Protocol.Tests.csproj` executa testes de:
+
+- rejeição de traversal e IDs duplicados sem distinção de maiúsculas/minúsculas;
+- gravação em chunks, offsets inválidos, checksum SHA-256 e finalização;
+- retoma de ficheiros `.part`, incluindo descarte de temporários maiores que o tamanho declarado;
+- framing sem perda de bytes entre cabeçalho e payload;
+- utilização única do código, associação ao dispositivo e limitação global de tentativas;
+- integração TCP/TLS ponta a ponta: emparelhamento, autenticação, manifesto, chunk, ACK, checksum e criação do ficheiro final.
+
+Executa os testes num PC Windows com .NET 8 SDK:
 
 ```powershell
-dotnet run --project .\tests\FastDrop.Protocol.Tests.csproj
+dotnet run --project .\tests\FastDrop.Protocol.Tests.csproj -c Release
+dotnet build .\FastDrop.Windows.csproj -c Release
 ```
 
-O workflow `.github/workflows/windows-client.yml` executa restore, build, testes e publicação win-x64 em `windows-latest`. O ambiente Manus atual não possui .NET SDK; por isso a execução local destes testes continua pendente nesta sessão. A aprovação da Fase 2.1 depende do resultado verde do workflow.
+O workflow `.github/workflows/windows-client.yml` executa restore, build, testes e publicação win-x64 em `windows-latest`. Uma execução completa passou no commit `bb246ddef0d7378bc35443804ad4c077dca7cf8a`: [ver GitHub Actions](https://github.com/2006aishad-spec/fastdrop/actions/runs/44117772091). Os últimos reforços de rate limit e renovação do ticket estão a ser revalidados em execução posterior.
+
+## Limitações antes da transferência real
+
+- O Android ainda não implementa o framing FD/01 nem a validação da fingerprint TLS.
+- A regra automática e restrita do Firewall do Windows ainda não foi implementada.
+- Ainda não houve teste físico entre Android e Windows nem validação específica no Windows 10 Home, no ASUS VivoBook E410KA ou numa máquina com 2 GB de RAM.
+- Esta fase valida o servidor Windows e a transferência de teste em CI; não significa que o produto já transfira ficheiros entre o Samsung e o PC.
