@@ -1,4 +1,9 @@
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using FastDrop.Windows.Networking;
 using FastDrop.Windows.Protocol;
 using FastDrop.Windows.Storage;
@@ -15,6 +20,7 @@ static class Test
         await ResumesExistingPartAsync();
         await ReadsFrameAndPayloadWithoutLossAsync();
         PairingIsSingleUseAndDeviceBound();
+        await ServerTransfersFileOverPinnedTlsAsync();
         Console.WriteLine($"PASS: {_passed} testes FD/01");
     }
 
@@ -109,6 +115,95 @@ static class Test
         Assert(pairing.IsDeviceForSession(response.SessionId, "android-a"), "dispositivo não associado");
         Assert(!pairing.IsDeviceForSession(response.SessionId, "android-b"), "dispositivo divergente associado");
         Pass();
+    }
+
+
+    private static async Task ServerTransfersFileOverPinnedTlsAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-server-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var rsa = RSA.Create(2048);
+            var certificateRequest = new CertificateRequest(
+                "CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            using var certificate = certificateRequest.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+            var expectedFingerprint = SHA256.HashData(certificate.RawData);
+
+            var pairing = new PairingService();
+            await using var server = new LocalTransferServer(
+                pairing, new TransferStore(), () => root, certificate, transferPort: 0);
+            server.Start();
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, server.Port, timeout.Token);
+            await using var tls = new SslStream(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                (_, presented, _, _) => presented is not null &&
+                    CryptographicOperations.FixedTimeEquals(
+                        SHA256.HashData(presented.GetRawCertData()), expectedFingerprint));
+            await tls.AuthenticateAsClientAsync(
+                new SslClientAuthenticationOptions { TargetHost = "localhost" },
+                timeout.Token);
+
+            var reader = new Fd01Reader(tls);
+            var writer = new Fd01Writer(tls);
+            var pairingCode = pairing.CurrentCode;
+            await writer.WriteMessageAsync(
+                "PAIR", new PairRequest("android-integration", pairingCode, "nonce-integration"), timeout.Token);
+            var paired = await ReadProtocolMessageAsync<PairResponse>(reader, "PAIR_ACCEPTED", timeout.Token);
+            Assert(paired.Token is not null, "servidor não entregou token de sessão");
+
+            await writer.WriteMessageAsync(
+                "AUTH", new PairAuth(paired.SessionId, paired.Token!), timeout.Token);
+
+            var payload = System.Text.Encoding.UTF8.GetBytes("transferência TLS de integração");
+            var hash = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
+            var manifest = new TransferManifest(paired.SessionId, "android-integration", new[]
+            {
+                new ManifestEntry("integration-file", "integration.bin", payload.Length, "document", hash),
+            });
+            await writer.WriteMessageAsync("MANIFEST", manifest, timeout.Token);
+            await ReadProtocolMessageAsync<JsonElement>(reader, "MANIFEST_ACCEPTED", timeout.Token);
+            Assert(pairing.CurrentCode != pairingCode, "código não foi renovado após emparelhamento");
+
+            await writer.WriteMessageAsync(
+                "FILE_BEGIN", new FileBegin("integration-file"), timeout.Token);
+            var resume = await ReadProtocolMessageAsync<JsonElement>(reader, "RESUME", timeout.Token);
+            Assert(resume.GetProperty("offset").GetInt64() == 0, "servidor não iniciou no offset zero");
+
+            await writer.WriteMessageAsync(
+                "CHUNK",
+                new ChunkHeader("integration-file", 0, payload.Length, hash),
+                timeout.Token);
+            await tls.WriteAsync(payload.AsMemory(), timeout.Token);
+            await tls.FlushAsync(timeout.Token);
+            var ack = await ReadProtocolMessageAsync<JsonElement>(reader, "ACK", timeout.Token);
+            Assert(ack.GetProperty("offset").GetInt64() == payload.Length, "ACK não confirmou o offset esperado");
+
+            await writer.WriteMessageAsync(
+                "FILE_END", new FileEnd("integration-file", hash), timeout.Token);
+            await ReadProtocolMessageAsync<JsonElement>(reader, "FILE_COMPLETE", timeout.Token);
+
+            var finalPath = Directory.GetFiles(root, "integration.bin", SearchOption.AllDirectories).SingleOrDefault();
+            Assert(finalPath is not null, "servidor não criou o ficheiro final");
+            Assert(File.ReadAllBytes(finalPath!).SequenceEqual(payload), "conteúdo recebido pelo servidor diverge");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task<T> ReadProtocolMessageAsync<T>(
+        Fd01Reader reader, string expectedCommand, CancellationToken cancellationToken)
+    {
+        var line = await reader.ReadLineAsync(cancellationToken) ?? throw new EndOfStreamException();
+        var prefix = expectedCommand + " ";
+        Assert(line.StartsWith(prefix, StringComparison.Ordinal), $"esperado {expectedCommand}, recebido: {line}");
+        return JsonSerializer.Deserialize<T>(line[prefix.Length..], Fd01Protocol.JsonOptions)
+            ?? throw new InvalidDataException($"Resposta {expectedCommand} vazia.");
     }
 
     private static async Task AssertThrowsAsync<T>(Func<Task> action) where T : Exception
