@@ -42,6 +42,17 @@ class XTransferTransportModule : Module() {
     }
   }
 
+  private fun isPrivateLanAddress(address: InetAddress): Boolean {
+    if (address.address.size == 4) {
+      val bytes = address.address.map { it.toInt() and 0xff }
+      return bytes[0] == 10 ||
+        (bytes[0] == 172 && bytes[1] in 16..31) ||
+        (bytes[0] == 192 && bytes[1] == 168) ||
+        (bytes[0] == 169 && bytes[1] == 254)
+    }
+    return address.isLinkLocalAddress || address.isSiteLocalAddress
+  }
+
   private fun discoverWindowsDevices(durationMs: Long): List<Map<String, Any>> {
     val context = appContext.reactContext?.applicationContext
       ?: throw IllegalStateException("Contexto Android indisponível.")
@@ -62,9 +73,11 @@ class XTransferTransportModule : Module() {
         socket.soTimeout = 300
         val networkInterface = NetworkInterface.getByInetAddress(
           socket.localAddress.takeIf { !it.isAnyLocalAddress } ?: InetAddress.getLocalHost()
-        ) ?: NetworkInterface.getNetworkInterfaces().toList().firstOrNull {
-          it.isUp && !it.isLoopback && it.supportsMulticast()
-        } ?: throw IllegalStateException("Nenhuma interface Wi-Fi com multicast disponível.")
+        ) ?: NetworkInterface.getNetworkInterfaces().toList()
+          .filter { it.isUp && !it.isLoopback && it.supportsMulticast() }
+          .sortedBy { if (it.name.startsWith("wlan", true) || it.name.startsWith("wifi", true)) 0 else 1 }
+          .firstOrNull()
+          ?: throw IllegalStateException("Nenhuma interface Wi-Fi com multicast disponível.")
 
         socket.joinGroup(InetSocketAddress(group, DISCOVERY_PORT), networkInterface)
         try {
@@ -97,7 +110,7 @@ class XTransferTransportModule : Module() {
               platform != "Windows" || protocol != PROTOCOL_VERSION ||
               port != TRANSFER_PORT || !fingerprint.matches(Regex("^[a-f0-9]{64}$")) ||
               packet.address.isAnyLocalAddress || packet.address.isLoopbackAddress ||
-              packet.address.isMulticastAddress
+              packet.address.isMulticastAddress || !isPrivateLanAddress(packet.address)
             ) continue
 
             devices[deviceId] = mapOf(
