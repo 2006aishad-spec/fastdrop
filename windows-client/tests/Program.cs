@@ -20,6 +20,9 @@ static class Test
         await WritesAndVerifiesFileAsync();
         await ResumesExistingPartAsync();
         await ResumesAcrossFreshPairSessionsAsync();
+        await RecognizesCompletedFilesAfterRePairAsync();
+        await WritesEmptyFileAsync();
+        await CancelRemovesPartialFilesAsync();
         await RejectsInvalidChunkAndOffsetAsync();
         await DiscardsOversizedResumeFileAsync();
         await RejectsCaseInsensitiveDuplicateIdsAsync();
@@ -126,6 +129,84 @@ static class Test
             var final = await second.FinishFileAsync("file-1", hash);
             Assert(File.ReadAllBytes(final).SequenceEqual(content),
                 "conteúdo final divergente após retoma entre sessões");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task RecognizesCompletedFilesAfterRePairAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-completed-resume-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var content = System.Text.Encoding.UTF8.GetBytes("already completed before the link dropped");
+            var hash = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+            const string transferId = "completed-transfer-01";
+            var firstManifest = new TransferManifest("completed-session-one", "android-test", new[]
+            {
+                new ManifestEntry("file-complete", "completed.bin", content.Length, "document", hash),
+            }, transferId);
+            var first = new TransferSession(new TransferStore());
+            await first.AcceptManifestAsync(firstManifest, root);
+            await first.WriteChunkAsync("file-complete", 0, content,
+                Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant());
+            var completedPath = await first.FinishFileAsync("file-complete", hash);
+
+            var secondManifest = new TransferManifest("completed-session-two", "android-test", new[]
+            {
+                new ManifestEntry("file-complete", "completed.bin", content.Length, "document", hash),
+            }, transferId);
+            var second = new TransferSession(new TransferStore());
+            await second.AcceptManifestAsync(secondManifest, root);
+            Assert(second.GetResumeOffset("file-complete") == content.Length,
+                "ficheiro concluído não foi reconhecido após novo emparelhamento");
+            var returnedPath = await second.FinishFileAsync("file-complete", hash);
+            Assert(returnedPath == completedPath, "a retoma tentou criar uma cópia duplicada");
+            Assert(Directory.GetFiles(second.SessionFolder!, "*.bin").Length == 1,
+                "foi criada uma cópia duplicada de um ficheiro já concluído");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task WritesEmptyFileAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-empty-file-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(Array.Empty<byte>())).ToLowerInvariant();
+            var manifest = new TransferManifest("empty-session", "android-test", new[]
+            {
+                new ManifestEntry("empty-file", "empty.bin", 0, "document", hash),
+            });
+            var session = new TransferSession(new TransferStore());
+            await session.AcceptManifestAsync(manifest, root);
+            var final = await session.FinishFileAsync("empty-file", hash);
+            Assert(File.Exists(final) && new FileInfo(final).Length == 0, "ficheiro vazio não foi finalizado corretamente");
+            Pass();
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static async Task CancelRemovesPartialFilesAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fastdrop-cancel-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var data = System.Text.Encoding.UTF8.GetBytes("partial");
+            var hash = Convert.ToHexString(SHA256.HashData(data.Concat(new byte[] { 1 }).ToArray())).ToLowerInvariant();
+            var manifest = new TransferManifest("cancel-session", "android-test", new[]
+            {
+                new ManifestEntry("cancel-file", "cancel.bin", data.Length + 1, "document", hash),
+            });
+            var session = new TransferSession(new TransferStore());
+            await session.AcceptManifestAsync(manifest, root);
+            await session.WriteChunkAsync("cancel-file", 0, data,
+                Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant());
+            var partPath = Path.Combine(session.SessionFolder!, "cancel-file.part");
+            Assert(File.Exists(partPath), "chunk parcial não foi criado");
+            session.Cancel();
+            Assert(!File.Exists(partPath), "CANCEL não removeu o ficheiro .part");
             Pass();
         }
         finally { TryDelete(root); }
