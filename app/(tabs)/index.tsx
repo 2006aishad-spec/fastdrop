@@ -208,7 +208,7 @@ export default function HomeScreen() {
             <Text style={s.progressTitle}>{progress?.status === "hashing" ? "A preparar ficheiros" : progress?.status === "connecting" ? "A estabelecer ligação segura" : progress?.status === "pairing" ? "A confirmar emparelhamento" : "A transferir"}</Text>
             <Text numberOfLines={1} style={s.progressSub}>{progress?.currentFile || progress?.message || "Aguarda…"}</Text>
           </View><Text style={s.percent}>{percent}%</Text></View>
-          <View style={s.track}><View style={[s.fill, { width: percent + "%" }]} /></View>
+          <View style={s.track}><View style={[s.fill, { width: (percent + "%") as `${number}%` }]} /></View>
           <Text style={s.progressMeta}>{progress ? bytes(progress.sentBytes) + " de " + bytes(progress.totalBytes) : "A preparar ligação"}</Text>
           <Pressable onPress={() => void cancelTransfer()} style={s.cancel}><Text style={s.cancelText}>Cancelar transferência</Text></Pressable>
         </View> : null}
