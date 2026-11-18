@@ -45,20 +45,3 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Publish hotspot-first Android preview
-        if: github.ref == 'refs/heads/redesign/hotspot-local-host'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v0.2.0-hotspot-preview
-          target_commitish: ${{ github.sha }}
-          name: FastDrop 0.2.0 - Hotspot Preview
-          body: |
-            ## FastDrop 0.2.0 — Hotspot-first Android Preview
-            Esta preview testa o novo fluxo em que o telefone cria ou usa o seu hotspot e disponibiliza um servidor local para o PC.
-
-            **Estado:** preview técnico. Requer teste físico no Samsung Galaxy A16 e ASUS VivoBook E410KA. TLS/pinning no novo servidor local, retoma de uploads e checksum final ainda não estão concluídos.
-          prerelease: true
-          draft: false
-          files: android/app/build/outputs/apk/debug/app-debug.apk
-          fail_on_unmatched_files: true
-          overwrite_files: true
