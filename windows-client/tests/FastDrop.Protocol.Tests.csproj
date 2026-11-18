@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Protocol/Fd01Protocol.cs" Link="Protocol/Fd01Protocol.cs" />
+    <Compile Include="../Protocol/Fd01Framing.cs" Link="Protocol/Fd01Framing.cs" />
+    <Compile Include="../Networking/PairingService.cs" Link="Networking/PairingService.cs" />
+    <Compile Include="../Networking/LocalTransferServer.cs" Link="Networking/LocalTransferServer.cs" />
+    <Compile Include="../Networking/LocalTlsCertificate.cs" Link="Networking/LocalTlsCertificate.cs" />
+    <Compile Include="../Storage/TransferStore.cs" Link="Storage/TransferStore.cs" />
+    <Compile Include="../Transfer/TransferSession.cs" Link="Transfer/TransferSession.cs" />
+  </ItemGroup>
+</Project>

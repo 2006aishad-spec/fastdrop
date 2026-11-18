@@ -1,8 +1,8 @@
-# Plano do FastDrop
+# Plano do XTransfer Offline
 
 ## Produto e primeira entrega
 
-FastDrop é uma aplicação Android offline-first para enviar ficheiros grandes do telemóvel para um computador através de rede local ou ligação direta, sem cabo, sem internet e sem servidor externo. Esta primeira entrega é um protótipo móvel navegável: apresenta descoberta de computadores, emparelhamento visual, seleção de ficheiros, uma transferência em andamento e histórico local simulado. O código deve deixar claro onde o transporte real, a seleção nativa de ficheiros e o cliente Windows serão ligados numa fase seguinte.
+XTransfer Offline é o nome de produto pretendido para a aplicação FastDrop. É uma aplicação Android/Windows offline-first para enviar e receber ficheiros grandes através de rede local ou hotspot, sem cabo, internet ou servidor externo. A base atual é um protótipo navegável e um cliente Windows inicial; a auditoria técnica completa está em `docs/PHASE1-AUDIT.md`.
 
 ## Arquitetura
 
@@ -56,7 +56,7 @@ FastDrop é uma aplicação Android offline-first para enviar ficheiros grandes 
 
 ## Limites conscientes desta primeira entrega
 
-A descoberta real de dispositivos, picker nativo de ficheiros, streaming P2P, checksum e cliente Windows ainda não são executados pelo protótipo visual. O desenho já expõe esses estados e a arquitetura deve receber essas implementações sem alterar o fluxo principal.
+A descoberta Android, picker nativo, streaming P2P, emparelhamento, listener TCP, checksum ligado ao transporte e envio bidirecional ainda não são executados pelo protótipo visual. Os dados exibidos no dashboard ainda são demonstrativos e não devem ser tratados como resultados de rede.
 
 ## Fase Windows — cliente de receção leve
 

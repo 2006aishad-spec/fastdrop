@@ -8,6 +8,9 @@ namespace FastDrop.Windows;
 public sealed class MainForm : Form
 {
     private readonly LocalDiscoveryService _discovery;
+    private readonly PairingService _pairing = new();
+    private readonly LocalTlsCertificate _tls;
+    private readonly LocalTransferServer _transferServer;
     private readonly TransferStore _store = new();
     private readonly Label _statusLabel = new();
     private readonly Label _detailLabel = new();
@@ -27,11 +30,14 @@ public sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
 
-        _discovery = new LocalDiscoveryService(Environment.MachineName);
+        _tls = new LocalTlsCertificate();
+        _discovery = new LocalDiscoveryService(Environment.MachineName, _tls.Sha256Fingerprint);
+        _transferServer = new LocalTransferServer(_pairing, _store, () => _destination, _tls.Certificate);
         _discovery.AnnouncementSent += announcement => BeginInvoke(() => SetOnlineState(announcement));
+        _transferServer.StatusChanged += status => BeginInvoke(() => SetServerState(status));
         BuildUi();
-        Shown += (_, _) => _discovery.Start();
-        FormClosed += async (_, _) => await _discovery.DisposeAsync();
+        Shown += (_, _) => { _transferServer.Start(); _discovery.Start(); };
+        FormClosed += async (_, _) => { await _transferServer.DisposeAsync(); await _discovery.DisposeAsync(); };
     }
 
     private void BuildUi()
@@ -52,7 +58,7 @@ public sealed class MainForm : Form
 
         var title = new Label { Text = "Pronto para\nreceber ficheiros.", AutoSize = true, Font = new Font("Segoe UI", 28F, FontStyle.Bold), ForeColor = Color.FromArgb(24, 32, 24), Dock = DockStyle.Fill };
         var orb = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(216, 243, 106), Margin = new Padding(34, 14, 12, 14) };
-        orb.Paint += (_, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var pen = new Pen(Color.FromArgb(24, 32, 24), 4); e.Graphics.DrawArc(new Rectangle(22, 22, 52, 52), 35, 210); e.Graphics.DrawArc(new Rectangle(36, 32, 42, 42), 215, 210); };
+        orb.Paint += (_, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var pen = new Pen(Color.FromArgb(24, 32, 24), 4); e.Graphics.DrawArc(pen, new Rectangle(22, 22, 52, 52), 35, 210); e.Graphics.DrawArc(pen, new Rectangle(36, 32, 42, 42), 215, 210); };
         root.Controls.Add(title, 0, 1); root.Controls.Add(orb, 1, 1);
 
         var card = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18), Margin = new Padding(0, 8, 0, 8), BorderStyle = BorderStyle.FixedSingle };
@@ -76,8 +82,13 @@ public sealed class MainForm : Form
     private void SetOnlineState(DiscoveryAnnouncement announcement)
     {
         _statusLabel.Text = "Este PC está pronto";
-        _detailLabel.Text = $"A aguardar ligação local · {announcement.ProtocolVersion} · porta {announcement.TransferPort}";
+        _detailLabel.Text = $"A aguardar TLS local · {announcement.ProtocolVersion} · porta {announcement.TransferPort} · código {_pairing.CurrentCode}";
         _statusOrb.BackColor = Color.FromArgb(216, 243, 106);
+    }
+
+    private void SetServerState(string status)
+    {
+        if (!IsDisposed) _detailLabel.Text = $"{status} · código {_pairing.CurrentCode}";
     }
 
     private void ChooseDestination()

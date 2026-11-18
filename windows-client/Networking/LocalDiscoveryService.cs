@@ -12,13 +12,15 @@ public sealed class LocalDiscoveryService : IAsyncDisposable
 {
     private readonly string _deviceId = $"win-{Environment.MachineName.ToLowerInvariant()}";
     private readonly string _deviceName;
+    private readonly string _certificateSha256;
     private readonly UdpClient _udp = new();
     private CancellationTokenSource? _cancellation;
     private Task? _loop;
 
-    public LocalDiscoveryService(string deviceName)
+    public LocalDiscoveryService(string deviceName, string certificateSha256)
     {
         _deviceName = deviceName;
+        _certificateSha256 = certificateSha256;
     }
 
     public event Action<DiscoveryAnnouncement>? AnnouncementSent;
@@ -44,7 +46,8 @@ public sealed class LocalDiscoveryService : IAsyncDisposable
                     "Windows",
                     Fd01Protocol.ProtocolVersion,
                     Convert.ToHexString(RandomNumberGenerator.GetBytes(6)),
-                    Fd01Protocol.TransferPort);
+                    Fd01Protocol.TransferPort,
+                    _certificateSha256);
                 var payload = JsonSerializer.SerializeToUtf8Bytes(announcement, Fd01Protocol.JsonOptions);
                 await _udp.SendAsync(payload, endpoint, cancellationToken);
                 AnnouncementSent?.Invoke(announcement);

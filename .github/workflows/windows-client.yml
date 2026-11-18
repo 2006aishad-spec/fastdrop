@@ -1,0 +1,53 @@
+name: Windows client validation
+
+on:
+  push:
+    branches: [main, development/xtransfer-offline]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-client:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore .NET dependencies
+        run: dotnet restore windows-client/FastDrop.Windows.csproj
+      - name: Build Windows client
+        run: dotnet build windows-client/FastDrop.Windows.csproj --configuration Release --no-restore
+      - name: Run protocol tests
+        run: dotnet run --project windows-client/tests/FastDrop.Protocol.Tests.csproj --configuration Release
+      - name: Publish portable executable
+        run: dotnet publish windows-client/FastDrop.Windows.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=None --output artifacts/win-x64
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xtransfer-offline-windows-win-x64
+          path: artifacts/win-x64/FastDrop.exe
+
+      - name: Publish Windows EXE to GitHub Releases
+        if: github.ref == 'refs/heads/development/xtransfer-offline'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0-windows-preview
+          target_commitish: ${{ github.sha }}
+          name: FastDrop 0.1.0 - Windows Preview
+          body: |
+            ## FastDrop 0.1.0 — Windows Preview
+
+            Download **FastDrop.exe** below for Windows 10/11 64-bit. It is self-contained and does not require a separate .NET runtime installation.
+
+            **Preview status:** the Windows build and automated protocol tests must pass in this workflow. Full physical transfer testing with the Android app has not yet been completed.
+          prerelease: true
+          draft: false
+          files: artifacts/win-x64/FastDrop.exe
+          fail_on_unmatched_files: true
+          overwrite_files: true
