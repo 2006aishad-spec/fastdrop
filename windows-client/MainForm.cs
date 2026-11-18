@@ -21,7 +21,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _destination = _store.DefaultDestination;
-        Text = "FastDrop";
+        Text = "XTransfer Offline";
         ClientSize = new Size(760, 500);
         MinimumSize = new Size(640, 420);
         StartPosition = FormStartPosition.CenterScreen;
@@ -52,7 +52,7 @@ public sealed class MainForm : Form
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         Controls.Add(root);
 
-        var brand = new Label { Text = "●  fastdrop", AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold), ForeColor = Color.FromArgb(24, 32, 24), Dock = DockStyle.Fill };
+        var brand = new Label { Text = "●  XTransfer Offline", AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold), ForeColor = Color.FromArgb(24, 32, 24), Dock = DockStyle.Fill };
         var pill = new Label { Text = "LOCAL / OFFLINE", AutoSize = true, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Consolas", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(129, 156, 39), Dock = DockStyle.Fill };
         root.Controls.Add(brand, 0, 0); root.Controls.Add(pill, 1, 0);
 
@@ -65,7 +65,7 @@ public sealed class MainForm : Form
         _statusOrb.Size = new Size(50, 50); _statusOrb.BackColor = Color.FromArgb(216, 243, 106); _statusOrb.Location = new Point(18, 25);
         _statusOrb.Paint += (_, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var brush = new SolidBrush(Color.FromArgb(24, 32, 24)); e.Graphics.FillEllipse(brush, 17, 17, 16, 16); };
         _statusLabel.Text = "A anunciar este PC"; _statusLabel.Font = new Font("Segoe UI", 14F, FontStyle.Bold); _statusLabel.ForeColor = Color.FromArgb(24, 32, 24); _statusLabel.Location = new Point(86, 24); _statusLabel.AutoSize = true;
-        _detailLabel.Text = "Abre o FastDrop no telemóvel para começar."; _detailLabel.Font = new Font("Segoe UI", 10F); _detailLabel.ForeColor = Color.FromArgb(111, 117, 107); _detailLabel.Location = new Point(86, 53); _detailLabel.AutoSize = true;
+        _detailLabel.Text = "Abre o XTransfer Offline no telefone para começar."; _detailLabel.Font = new Font("Segoe UI", 10F); _detailLabel.ForeColor = Color.FromArgb(111, 117, 107); _detailLabel.Location = new Point(86, 53); _detailLabel.AutoSize = true;
         card.Controls.Add(_statusOrb); card.Controls.Add(_statusLabel); card.Controls.Add(_detailLabel); root.Controls.Add(card, 0, 2); root.SetColumnSpan(card, 2);
 
         var destinationPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
@@ -75,7 +75,7 @@ public sealed class MainForm : Form
         chooseButton.Click += (_, _) => ChooseDestination();
         destinationPanel.Controls.Add(destinationTitle); destinationPanel.Controls.Add(_destinationLabel); destinationPanel.Controls.Add(chooseButton); root.Controls.Add(destinationPanel, 0, 3); root.SetColumnSpan(destinationPanel, 2);
 
-        var footer = new Label { Text = "FD/01   •   streaming por chunks   •   checksum por ficheiro   •   sem conta", AutoSize = true, Font = new Font("Consolas", 9F), ForeColor = Color.FromArgb(111, 117, 107), Anchor = AnchorStyles.Left | AnchorStyles.Bottom, Dock = DockStyle.Bottom };
+        var footer = new Label { Text = "FD/01   •   TLS   •   streaming por chunks   •   SHA-256   •   sem conta", AutoSize = true, Font = new Font("Consolas", 9F), ForeColor = Color.FromArgb(111, 117, 107), Anchor = AnchorStyles.Left | AnchorStyles.Bottom, Dock = DockStyle.Bottom };
         root.Controls.Add(footer, 0, 4); root.SetColumnSpan(footer, 2);
     }
 
