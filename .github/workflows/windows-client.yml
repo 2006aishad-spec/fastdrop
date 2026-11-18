@@ -2,7 +2,7 @@ name: Windows client validation
 
 on:
   push:
-    branches: [main, development/xtransfer-offline]
+    branches: [main, development/xtransfer-offline, redesign/hotspot-local-host]
   pull_request:
     branches: [main]
 
