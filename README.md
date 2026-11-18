@@ -1,158 +1,97 @@
 # XTransfer Offline
 
-**XTransfer Offline é um sistema de transferência de ficheiros com dois aplicativos nativos: Android e Windows.** O utilizador deve instalar e abrir a aplicação no telefone e no computador. A transferência deve acontecer diretamente entre as duas aplicações, através de uma rede local, sem navegador, conta, nuvem ou servidor externo.
+**XTransfer Offline é um sistema de transferência de ficheiros com duas aplicações nativas: Android e Windows.** A transferência acontece diretamente entre as aplicações pela rede local, sem navegador, conta, nuvem ou servidor externo.
 
-O repositório chama-se **FastDrop** por razões técnicas e históricas; o nome do produto é **XTransfer Offline**.
+O repositório continua a chamar-se **FastDrop** por razões históricas. O nome do produto é **XTransfer Offline**.
 
-> **Estado do projeto:** a branch contém uma implementação Android experimental de hotspot-first e um cliente Windows nativo anterior baseado no protocolo FD/01. Estes componentes ainda não estão integrados num fluxo app-a-app. A versão hotspot-first atualmente presente no código serve uma página HTTP para navegador; isso é um protótipo técnico e **não corresponde ao produto final pretendido**.
+## Requisitos do produto
 
-## Requisito principal do produto
-
-- Aplicativo Android instalável (APK).
-- Aplicativo Windows instalável/portátil (EXE).
-- Os dois aplicativos devem ter interface própria para Enviar e Receber.
-- O navegador não deve ser necessário em nenhuma etapa da transferência.
-- O telefone pode criar o hotspot e atuar como anfitrião da rede local.
-- O aplicativo Windows liga-se ao hotspot do telefone e comunica diretamente com o aplicativo Android.
+- Aplicação Android instalável (APK) e aplicação Windows nativa (EXE).
+- O telefone pode criar o hotspot; o PC liga-se à rede Wi-Fi do telefone.
+- Seleção, envio e receção devem acontecer dentro das aplicações nativas.
 - Transferência nos dois sentidos: Android → Windows e Windows → Android.
-- Funcionamento offline, sem Internet, contas, serviços cloud ou servidores externos.
+- Sem navegador, internet, contas, cloud ou serviços externos.
+- TLS, emparelhamento temporário, progresso real, pausa/retoma, cancelamento e verificação SHA-256.
 
-## Experiência pretendida
-
-1. O utilizador abre o XTransfer Offline nos dois dispositivos.
-2. No Android, escolhe **Criar ligação / Anfitrião**. A aplicação tenta iniciar um hotspot local gerido pelo Android; se não for possível, orienta o utilizador a ativar o hotspot manualmente.
-3. O Windows liga-se à rede Wi-Fi do telefone.
-4. O utilizador abre o XTransfer Offline no Windows e escolhe **Ligar ao telefone** ou seleciona o telefone encontrado na rede.
-5. Os dois aplicativos estabelecem uma sessão autenticada e apresentam os modos **Enviar** e **Receber**.
-6. O utilizador escolhe os ficheiros no aplicativo de origem e confirma a receção no aplicativo de destino.
-7. Ambos mostram progresso real, velocidade, estado, conclusão, pausa/retoma e cancelamento.
-
-O hotspot é apenas o meio de criar a rede local. **Não transforma o navegador na interface do produto.** A interface e as operações de ficheiros devem pertencer aos aplicativos nativos.
-
-## Estado real do código nesta branch
+## Estado atual desta branch
 
 ### Android
 
-O projeto utiliza Expo / React Native / TypeScript e um módulo nativo Kotlin em `modules/xtransfer-transport/`.
+O ecrã principal foi ligado ao transporte nativo FD/01 e recebeu uma revisão visual inspirada no iOS: fundo agrupado, cartões claros, títulos grandes, botões azuis, estados legíveis e navegação inferior simplificada.
 
-O código hotspot-first atualmente implementa:
-- Tentativa de criar hotspot local através da API Android `LocalOnlyHotspot`.
-- Fallback para hotspot ativado manualmente.
-- Servidor HTTP local com porta dinâmica e token temporário.
-- Página web local com operações de download e upload.
-- Streaming com buffer de 64 KB.
+O módulo Kotlin:
+- Tenta criar uma rede local através de WifiManager.LocalOnlyHotspot.
+- Permite usar um hotspot ativado manualmente nas Definições do Android.
+- Descobre o cliente Windows através de UDP multicast FD/01.
+- Abre uma ligação TCP/TLS e valida a fingerprint SHA-256 do certificado Windows.
+- Emparelha através do código temporário de seis caracteres.
+- Envia manifesto e ficheiros em chunks até 1 MiB, com ACK e SHA-256.
+- Emite eventos de progresso e suporta cancelamento.
 
-**Importante:** esta implementação HTTP/browser é um protótipo atualmente existente no código, não a arquitetura final aprovada para o produto. Deve ser substituída ou reaproveitada apenas como camada de rede, sem depender da página web para a experiência de utilização.
-
-O módulo também contém código Android anterior para descoberta Windows e envio FD/01 por TLS. É uma implementação separada e ainda requer integração e validação com o novo fluxo hotspot-first.
+O servidor HTTP experimental e a página web foram removidos do módulo Android. A aplicação não apresenta URLs nem pede para abrir um navegador.
 
 ### Windows
 
-Existe um aplicativo nativo C# WinForms em `windows-client/`, compilável com .NET 8. O cliente inclui servidor TCP/TLS, emparelhamento, descoberta UDP, protocolo FD/01, receção por chunks, retoma e validação SHA-256.
+Existe uma aplicação desktop nativa C# WinForms em windows-client/. Ela anuncia o PC na rede local, apresenta um código temporário, recebe ligações TLS na porta 45556, recebe ficheiros por chunks, permite retoma e verifica SHA-256 antes de finalizar os ficheiros.
 
-Esse cliente Windows foi desenvolvido para a arquitetura anterior, em que o Windows anunciava um servidor e o Android descobria o PC. **Ainda não está integrado com o novo fluxo em que o Android cria o hotspot e o Windows se liga ao telefone como cliente.** É necessário adaptar a aplicação Windows para esse papel, preservando a interface nativa.
+O papel atual do Windows é receber os ficheiros enviados pelo Android. A aplicação Windows ainda não tem o fluxo nativo de envio para Android.
 
-### Protocolo FD/01
+### Limitações ainda abertas
 
-O repositório contém uma implementação anterior do protocolo FD/01 sobre TCP/TLS:
-- Descoberta UDP multicast.
-- Código de emparelhamento temporário e autenticação de sessão.
-- TLS 1.2/1.3 e pinning de certificado no transporte Android anterior.
-- Manifesto de ficheiros.
-- Chunks até 1 MiB com SHA-256 e ACK.
-- Retoma por offset, pausa e cancelamento.
-- Verificação SHA-256 completa antes da finalização no destino.
+- A compilação Android/Gradle e os testes automatizados têm de passar após estas alterações.
+- A descoberta multicast através do hotspot do Galaxy A16 ainda precisa de teste físico.
+- A transferência Windows → Android ainda não está implementada.
+- O histórico persistente baseado em transferências reais ainda não está implementado; o ecrã apresenta um estado vazio honesto.
+- A utilização do hotspot gerido pelo Android pode variar conforme a versão do sistema e o fabricante.
 
-O protocolo e as respetivas funcionalidades são uma base técnica útil para a arquitetura nativa app-a-app. A sua integração com o hotspot-first ainda precisa de ser feita e testada. Não assumir que o servidor HTTP local implementa essas garantias.
+Não considerar a aplicação pronta para produção antes dos testes físicos no Samsung Galaxy A16 e no ASUS VivoBook E410KA.
 
-## Arquitetura-alvo
+## Protocolo FD/01
 
-- **Android:** aplicação nativa Expo/React Native com módulo Kotlin para hotspot, gestão da rede e transporte local.
-- **Windows:** aplicação desktop nativa C# WinForms (ou evolução compatível da aplicação existente).
-- **Rede:** hotspot local do telefone; o PC liga-se a essa rede.
-- **Transporte:** canal direto TCP com TLS e autenticação mútua da sessão, utilizando o protocolo de transferência definido pelo projeto.
-- **Interface:** seleção de ficheiros, emparelhamento, progresso, histórico, pausa, retoma e cancelamento dentro dos dois aplicativos.
-- **Sem browser:** remover do fluxo final a página web e a necessidade de aceder a URLs no computador.
+A implementação reutiliza o protocolo FD/01 existente para Android → Windows:
+- UDP multicast 239.255.42.42:45555 para descoberta.
+- TCP/TLS na porta 45556, com TLS 1.2/1.3.
+- Validação no Android da fingerprint SHA-256 do certificado anunciado pelo Windows.
+- Código de emparelhamento temporário e token de sessão.
+- Manifesto de ficheiros, chunks até 1 MiB e ACK por chunk.
+- Retoma por offset, cancelamento e verificação SHA-256 final no Windows.
 
-## Segurança
-
-A versão HTTP/browser presente nesta branch não deve ser utilizada para ficheiros confidenciais:
-- O servidor hotspot-first atual usa HTTP, não TLS.
-- O token temporário não protege criptograficamente o tráfego.
-- As funcionalidades de retoma e verificação SHA-256 final do protocolo FD/01 não estão ligadas ao upload HTTP.
-
-A arquitetura final app-a-app deve usar TLS com validação de certificado/fingerprint, emparelhamento temporário, autenticação de sessão, validação de manifesto e nomes, chunks com integridade, confirmação de receção e verificação SHA-256 do ficheiro completo. Não declarar o produto seguro ou pronto para produção até essas medidas estarem integradas e testadas.
+Estes mecanismos existem no código do protocolo. A operação no hotspot-first e a compatibilidade real entre os dois equipamentos ainda precisam de validação em hardware.
 
 ## Estrutura do projeto
 
-```text
-app/                         Interface Android com Expo Router
-components/                  Componentes reutilizáveis da interface
-modules/xtransfer-transport/ Módulo nativo Android, hotspot e transporte local
-lib/                         Modelos e documentação do protocolo
-windows-client/              Aplicativo desktop nativo C# WinForms
-docs/                        Auditorias e pesquisa técnica
-assets/images/               Ícones e identidade visual
-.github/workflows/            Workflows de validação e compilação
-TODO.md                      Lista de tarefas e estado de implementação
-plan.md                      Plano técnico e decisões do projeto
-```
+- app/: interface Android em Expo Router / React Native.
+- modules/xtransfer-transport/: módulo Kotlin de hotspot, descoberta e transporte.
+- windows-client/: aplicação Windows nativa C# WinForms.
+- lib/fd01-protocol.md: especificação do protocolo.
+- docs/: auditorias e pesquisa técnica.
+- TODO.md: estado das tarefas.
+- plan.md: plano técnico.
 
 ## Desenvolvimento Android
 
-Requisitos: Node.js 22, pnpm e ambiente Android compatível com Expo.
+Requisitos: Node.js 22, pnpm, Java 17 e Android SDK.
 
 ```bash
 pnpm install
 pnpm check
 pnpm lint
 pnpm exec expo prebuild --platform android --no-install
-```
-
-Compilar o APK a partir da pasta Android:
-
-```bash
 cd android
-./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug --no-daemon
 ```
-
-No Windows PowerShell:
-
-```powershell
-cd android
-.\gradlew.bat :app:assembleDebug
-```
-
-O módulo hotspot é nativo. Expo Go ou um preview web não validam as APIs Android de hotspot nem o transporte nativo; é necessário compilar e instalar o APK.
 
 ## Desenvolvimento Windows
 
-Requisitos: .NET 8 SDK num computador Windows.
+Requisitos: .NET 8 SDK e Windows.
 
 ```powershell
-cd windows-client
-dotnet restore .\FastDrop.Windows.csproj
-dotnet build .\FastDrop.Windows.csproj -c Release
-.\build.ps1 -Runtime win-x64
+dotnet restore windows-client/FastDrop.Windows.csproj
+dotnet build windows-client/FastDrop.Windows.csproj --configuration Release
+dotnet run --project windows-client/tests/FastDrop.Protocol.Tests.csproj --configuration Release
+dotnet publish windows-client/FastDrop.Windows.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output artifacts/win-x64
 ```
 
-O executável é gerado em `windows-client/publish/win-x64/`. O cliente atual é a base nativa existente, mas precisa de integração com o papel do Windows no fluxo hotspot-first.
+## Segurança e testes
 
-## Plano de integração e validação
-
-- [ ] Definir o Android como anfitrião da rede e o Windows como cliente nativo.
-- [ ] Substituir a dependência da página HTTP/browser por comunicação direta app-a-app.
-- [ ] Integrar o hotspot Android com um listener de transferência TCP/TLS no Android.
-- [ ] Adaptar o aplicativo Windows para descobrir/ligar ao endereço local do telefone.
-- [ ] Integrar emparelhamento, autenticação e pinning TLS nos dois aplicativos.
-- [ ] Implementar envio Android → Windows dentro das interfaces nativas.
-- [ ] Implementar envio Windows → Android dentro das interfaces nativas.
-- [ ] Integrar chunks, ACK, retoma, pausa, cancelamento e SHA-256 de ponta a ponta.
-- [ ] Remover do fluxo final as instruções de abrir navegador, URL e página web.
-- [ ] Compilar APK e EXE em CI e publicar ambos como artefactos separados.
-- [ ] Testar fisicamente Samsung Galaxy A16 ↔ ASUS VivoBook E410KA, incluindo hotspot, ficheiros grandes e interrupções de rede.
-- [ ] Validar segurança, estabilidade e consumo de memória antes de declarar uma versão pronta.
-
-**Critério de aceitação:** o utilizador consegue instalar e abrir o XTransfer Offline no Android e no Windows, ligar os dois pela rede hotspot do telefone e enviar/receber ficheiros sem abrir navegador ou utilizar serviços externos.
-
-O estado detalhado do trabalho está em [TODO.md](TODO.md).
+Não usar uma build não testada para ficheiros confidenciais. A CI valida compilação e testes automatizados; não substitui os testes entre Galaxy A16 e ASUS VivoBook E410KA, incluindo hotspot, descoberta, firewall, emparelhamento, interrupção, retoma, cancelamento e ficheiros grandes.
