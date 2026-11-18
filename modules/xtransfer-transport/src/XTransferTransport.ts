@@ -35,6 +35,16 @@ export type TransferResult = {
   totalBytes?: number;
 };
 
+export type LocalHostSession = {
+  address: string;
+  port: number;
+  token: string;
+  url: string;
+  ssid?: string | null;
+  password?: string | null;
+  managedHotspot: boolean;
+};
+
 type XTransferTransportEvents = {
   onTransferProgress(event: TransferProgressEvent): void;
 };
@@ -50,6 +60,9 @@ declare class NativeXTransferTransport extends NativeModule<XTransferTransportEv
   ): Promise<TransferResult>;
   pauseTransfer(): Promise<boolean>;
   cancelTransfer(): Promise<boolean>;
+  setHostFiles(files: PickedTransferFile[]): Promise<boolean>;
+  startLocalHost(useLocalHotspot: boolean): Promise<LocalHostSession>;
+  stopLocalHost(): Promise<boolean>;
 }
 
 let nativeModule: NativeXTransferTransport | null = null;
@@ -86,6 +99,18 @@ export async function pauseTransfer(): Promise<boolean> {
 
 export async function cancelTransfer(): Promise<boolean> {
   return getNativeModule().cancelTransfer();
+}
+
+export async function setHostFiles(files: PickedTransferFile[]): Promise<boolean> {
+  return getNativeModule().setHostFiles(files);
+}
+
+export async function startLocalHost(useLocalHotspot = true): Promise<LocalHostSession> {
+  return getNativeModule().startLocalHost(useLocalHotspot);
+}
+
+export async function stopLocalHost(): Promise<boolean> {
+  return getNativeModule().stopLocalHost();
 }
 
 export function addTransferProgressListener(

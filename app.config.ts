@@ -68,7 +68,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
     versionCode: 2,
-    permissions: ["POST_NOTIFICATIONS", "INTERNET", "ACCESS_WIFI_STATE", "CHANGE_WIFI_MULTICAST_STATE", "ACCESS_NETWORK_STATE"],
+    permissions: ["POST_NOTIFICATIONS", "INTERNET", "ACCESS_WIFI_STATE", "CHANGE_WIFI_STATE", "CHANGE_WIFI_MULTICAST_STATE", "ACCESS_NETWORK_STATE", "NEARBY_WIFI_DEVICES", "ACCESS_FINE_LOCATION"],
     intentFilters: [
       {
         action: "VIEW",

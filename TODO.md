@@ -133,3 +133,17 @@
 - [ ] Cancelamento e remoção dos .part dessa transferência.
 - [ ] Comparação SHA-256 da origem e do destino.
 - [ ] Medição da RAM e teste com ficheiros grandes no ASUS.
+
+## Fase 4 — redesign hotspot-first Android
+
+- [x] Pesquisadas referências Android LocalOnlyHotspot, Wi-Fi Direct, LocalSend e Phone Link.
+- [x] Criado o fluxo de UI Enviar/Receber com telefone como anfitrião local.
+- [x] Adicionado servidor local Android com token efémero, página web, download por streaming e upload por streaming.
+- [x] Adicionado fallback para hotspot ativado manualmente quando o Android não permitir criar o hotspot pela API.
+- [x] Acrescentadas permissões Android de Wi-Fi local e `NEARBY_WIFI_DEVICES`.
+- [x] Documentadas as limitações atuais: sem TLS no novo servidor local, sem retoma de upload e sem checksum final do upload.
+- [ ] Compilar o módulo nativo com Gradle/SDK Android; este ambiente não tem essas ferramentas.
+- [ ] Testar hotspot criado pelo Android no Galaxy A16 e ligação do ASUS VivoBook E410KA.
+- [ ] Adicionar TLS/pinning ao servidor local antes de o promover a modo seguro de produção.
+- [ ] Persistir histórico real de uploads/downloads e adicionar cancelamento/retoma no navegador.
+- [ ] Reavaliar Wi-Fi Direct e Bluetooth como fallbacks depois do caminho hotspot-first funcionar.
