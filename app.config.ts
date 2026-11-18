@@ -17,7 +17,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
-  appName: "FastDrop",
+  appName: "XTransfer Offline",
   appSlug: "fastdrop",
   logoUrl: "",
   scheme: schemeFromBundleId,
@@ -60,7 +60,7 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#D8F36A",
+      backgroundColor: "#F2F2F7",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -94,7 +94,7 @@ const config: ExpoConfig = {
         image: "./assets/images/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#F9FAF5",
+        backgroundColor: "#F2F2F7",
         dark: { backgroundColor: "#141A14" },
       },
     ],
