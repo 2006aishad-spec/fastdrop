@@ -55,7 +55,6 @@ class XTransferTransportModule : Module() {
   private val executor = Executors.newFixedThreadPool(2)
   private val activeTransfer = AtomicReference<TransferControl?>(null)
   private val pendingPicker = AtomicReference<Promise?>(null)
-  private val hotspotServer = AtomicReference<LocalHotspotServer?>(null)
   private val hotspotReservation = AtomicReference<WifiManager.LocalOnlyHotspotReservation?>(null)
 
   override fun definition() = ModuleDefinition {
@@ -156,83 +155,38 @@ class XTransferTransportModule : Module() {
       val control = activeTransfer.get()
       if (control == null) false else { control.action = TransferAction.CANCEL; true }
     }
-    AsyncFunction("setHostFiles") { files: List<Map<String, Any?>> ->
-      val context = appContext.reactContext?.applicationContext ?: throw IllegalStateException("Contexto Android indisponível.")
-      val selected = files.map { item ->
-        val uri = Uri.parse(item["uri"] as? String ?: throw IllegalArgumentException("URI inválida."))
-        val name = item["name"] as? String ?: throw IllegalArgumentException("Nome inválido.")
-        val size = (item["size"] as? Number)?.toLong() ?: throw IllegalArgumentException("Tamanho inválido.")
-        val mime = item["mimeType"] as? String ?: "application/octet-stream"
-        HostFile(uri, name, size, mime)
-      }
-      hotspotServer.get()?.setFiles(selected)
-      true
-    }
-    AsyncFunction("startLocalHost") { useLocalHotspot: Boolean, promise: Promise ->
-      val context = appContext.reactContext?.applicationContext
+    AsyncFunction("startLocalHotspot") { useLocalHotspot: Boolean, promise: Promise ->
+      val context: Context = appContext.reactContext?.applicationContext
         ?: throw IllegalStateException("Contexto Android indisponível.")
-      executor.execute {
-        try {
-          val server = hotspotServer.get() ?: LocalHotspotServer(context).also {
-            it.start()
-            hotspotServer.set(it)
+      if (!useLocalHotspot || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        promise.resolve(mapOf("managedHotspot" to false, "ssid" to null, "password" to null))
+      } else if (hotspotReservation.get() != null) {
+        promise.reject("HOTSPOT_ALREADY_ACTIVE", "O hotspot local já está ativo.", null)
+      } else {
+        val wifi = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifi.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
+          override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
+            val previous = hotspotReservation.getAndSet(reservation)
+            try { previous?.close() } catch (_: Exception) { }
+            val config = reservation.wifiConfiguration
+            promise.resolve(mapOf("managedHotspot" to true, "ssid" to config?.SSID, "password" to config?.preSharedKey))
           }
-          if (!useLocalHotspot || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            promise.resolve(hostSession(server, null, null))
-          } else {
-            val wifi = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            wifi.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
-              override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
-                hotspotReservation.set(reservation)
-                val config = reservation.wifiConfiguration
-                promise.resolve(hostSession(server, config?.SSID, config?.preSharedKey))
-              }
-              override fun onFailed(reason: Int) {
-                promise.reject("HOTSPOT_FAILED", "O Android não conseguiu iniciar o hotspot local (código $reason). Ativa o hotspot manualmente e tenta novamente.", null)
-              }
-              override fun onStopped() { hotspotReservation.set(null) }
-            }, Handler(Looper.getMainLooper()))
+          override fun onFailed(reason: Int) {
+            promise.reject("HOTSPOT_FAILED", "O Android não conseguiu criar o hotspot local (código $reason). Ativa o hotspot manualmente nas Definições e tenta novamente.", null)
           }
-        } catch (error: Exception) {
-          promise.reject("LOCAL_HOST_FAILED", error.message ?: "Não foi possível iniciar o servidor local.", error)
-        }
+          override fun onStopped() { hotspotReservation.set(null) }
+        }, Handler(Looper.getMainLooper()))
       }
     }
-    AsyncFunction("stopLocalHost") {
+    AsyncFunction("stopLocalHotspot") {
       try { hotspotReservation.getAndSet(null)?.close() } catch (_: Exception) { }
-      hotspotServer.getAndSet(null)?.stop()
       true
     }
     OnDestroy {
       activeTransfer.get()?.action = TransferAction.CANCEL
       try { hotspotReservation.getAndSet(null)?.close() } catch (_: Exception) { }
-      hotspotServer.getAndSet(null)?.stop()
       executor.shutdownNow()
     }
-  }
-
-  private fun hostSession(server: LocalHotspotServer, ssid: String?, password: String?): Map<String, Any?> {
-    val address = localIpv4Address() ?: throw IllegalStateException("Não foi possível descobrir o endereço local do telefone.")
-    val port = server.port()
-    return mapOf(
-      "address" to address,
-      "port" to port,
-      "token" to server.token,
-      "url" to "http://$address:$port/?token=${server.token}",
-      "ssid" to ssid,
-      "password" to password,
-      "managedHotspot" to (ssid != null)
-    )
-  }
-
-  private fun localIpv4Address(): String? {
-    val interfaces = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-    return interfaces
-      .filter { it.isUp && !it.isLoopback }
-      .sortedBy { if (it.name.contains("wlan", true) || it.name.contains("wifi", true)) 0 else 1 }
-      .flatMap { it.inetAddresses.toList() }
-      .firstOrNull { it.address.size == 4 && !it.isLoopbackAddress && !it.isLinkLocalAddress }
-      ?.hostAddress
   }
 
   private fun isPrivateLanAddress(address: InetAddress): Boolean {
