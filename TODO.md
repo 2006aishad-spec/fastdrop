@@ -134,16 +134,19 @@
 - [ ] Comparação SHA-256 da origem e do destino.
 - [ ] Medição da RAM e teste com ficheiros grandes no ASUS.
 
-## Fase 4 — redesign hotspot-first Android
+## Fase 4 — integração nativa hotspot-first
 
-- [x] Pesquisadas referências Android LocalOnlyHotspot, Wi-Fi Direct, LocalSend e Phone Link.
-- [x] Criado o fluxo de UI Enviar/Receber com telefone como anfitrião local.
-- [x] Adicionado servidor local Android com token efémero, página web, download por streaming e upload por streaming.
-- [x] Adicionado fallback para hotspot ativado manualmente quando o Android não permitir criar o hotspot pela API.
-- [x] Acrescentadas permissões Android de Wi-Fi local e `NEARBY_WIFI_DEVICES`.
-- [x] Documentadas as limitações atuais: sem TLS no novo servidor local, sem retoma de upload e sem checksum final do upload.
-- [ ] Compilar o módulo nativo com Gradle/SDK Android; este ambiente não tem essas ferramentas.
-- [ ] Testar hotspot criado pelo Android no Galaxy A16 e ligação do ASUS VivoBook E410KA.
-- [ ] Adicionar TLS/pinning ao servidor local antes de o promover a modo seguro de produção.
-- [ ] Persistir histórico real de uploads/downloads e adicionar cancelamento/retoma no navegador.
-- [ ] Reavaliar Wi-Fi Direct e Bluetooth como fallbacks depois do caminho hotspot-first funcionar.
+- [x] Criado o fluxo de hotspot Android gerido por WifiManager.LocalOnlyHotspot.
+- [x] Mantido fallback para hotspot ativado manualmente nas Definições Android.
+- [x] Ligado o ecrã Android ao seletor SAF, descoberta Windows FD/01, emparelhamento e envio TLS.
+- [x] Reutilizado o FD/01 existente: fingerprint pinning, chunks, ACK, retoma e SHA-256.
+- [x] Removido o servidor HTTP experimental e a página web do módulo Android.
+- [x] Atualizada a interface Android com hierarquia visual e componentes inspirados no iOS.
+- [x] Atualizados Histórico e Definições para não apresentarem registos ou controlos demonstrativos.
+- [ ] Obter CI TypeScript/lint/Gradle e Windows/.NET verde após estas alterações.
+- [ ] Validar hotspot gerido e manual no Galaxy A16.
+- [ ] Validar descoberta multicast do Windows através do hotspot Android.
+- [ ] Testar envio Android → Windows: código errado/expirado, fingerprint divergente, ficheiros grandes, pausa, retoma, cancelamento e SHA-256.
+- [ ] Implementar receção Windows → Android por transporte nativo seguro, sem navegador.
+- [ ] Implementar histórico persistente local com eventos reais.
+- [ ] Testar consumo de memória, firewall e estabilidade no ASUS VivoBook E410KA.
