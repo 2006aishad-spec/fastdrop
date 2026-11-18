@@ -1,94 +1,48 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useState } from "react";
-import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
-
-const colors = {
-  ink: "#182018",
-  muted: "#6F756B",
-  line: "#E0E6D7",
-  faint: "#F2F4EC",
-  lime: "#D8F36A",
-  limeDark: "#819C27",
-  white: "#FFFFFF",
-};
-
-function SettingRow({ icon, title, description, value, onValueChange }: { icon: keyof typeof MaterialIcons.glyphMap; title: string; description: string; value: boolean; onValueChange: (value: boolean) => void }) {
-  return (
-    <View style={styles.settingRow}>
-      <View style={styles.settingIcon}><MaterialIcons name={icon} size={19} color={colors.ink} /></View>
-      <View style={styles.settingCopy}><Text style={styles.settingTitle}>{title}</Text><Text style={styles.settingDescription}>{description}</Text></View>
-      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: "#D7DED0", true: colors.lime }} thumbColor={value ? colors.ink : "#FFFFFF"} />
-    </View>
-  );
+const C={white:"#FFFFFF",ink:"#111318",muted:"#6C6C70",faint:"#8E8E93",line:"#E5E5EA",blue:"#007AFF",blueSoft:"#EAF3FF",green:"#34C759",greenSoft:"#EAF8EE"};
+function InfoRow({icon,title,detail}:{icon:keyof typeof MaterialIcons.glyphMap;title:string;detail:string}) {
+ return <View style={s.row}><View style={s.rowIcon}><MaterialIcons name={icon} size={18} color={C.blue}/></View><View style={s.rowCopy}><Text style={s.rowTitle}>{title}</Text><Text style={s.rowDetail}>{detail}</Text></View></View>;
 }
-
-export default function SettingsScreen() {
-  const [nearby, setNearby] = useState(true);
-  const [autoAccept, setAutoAccept] = useState(false);
-  const [keepHistory, setKeepHistory] = useState(true);
-
-  return (
-    <ScreenContainer containerClassName="bg-[#F9FAF5]" safeAreaClassName="bg-[#F9FAF5]">
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.eyebrow}>CONTROLO LOCAL</Text>
-        <Text style={styles.title}>Definições</Text>
-        <Text style={styles.intro}>Configura como o FastDrop encontra e protege os teus dispositivos.</Text>
-
-        <Text style={styles.sectionLabel}>LIGAÇÃO</Text>
-        <View style={styles.card}>
-          <SettingRow icon="wifi-tethering" title="Descoberta automática" description="Procurar PCs FastDrop na rede local" value={nearby} onValueChange={setNearby} />
-          <View style={styles.divider} />
-          <SettingRow icon="done-all" title="Aceitar automaticamente" description="Pedir confirmação antes de cada envio" value={autoAccept} onValueChange={setAutoAccept} />
-        </View>
-
-        <Text style={styles.sectionLabel}>PRIVACIDADE E DADOS</Text>
-        <View style={styles.card}>
-          <SettingRow icon="history" title="Guardar histórico local" description="Manter as últimas sessões neste dispositivo" value={keepHistory} onValueChange={setKeepHistory} />
-          <View style={styles.privacyStrip}><MaterialIcons name="shield" size={17} color={colors.limeDark} /><Text style={styles.privacyText}>O FastDrop não usa contas, servidores externos ou internet para transferir.</Text></View>
-        </View>
-
-        <Text style={styles.sectionLabel}>SOBRE O PROTOCOLO</Text>
-        <View style={styles.protocolCard}>
-          <View style={styles.protocolTop}><View><Text style={styles.protocolTitle}>FastDrop / FD-01</Text><Text style={styles.protocolSubtitle}>Arquitetura pronta para Windows</Text></View><View style={styles.versionPill}><Text style={styles.versionText}>v0.1</Text></View></View>
-          <View style={styles.protocolLine}><Text style={styles.protocolKey}>TRANSPORTE</Text><Text style={styles.protocolValue}>LAN / Wi-Fi Direct</Text></View>
-          <View style={styles.protocolLine}><Text style={styles.protocolKey}>MEMÓRIA</Text><Text style={styles.protocolValue}>Streaming por chunks</Text></View>
-          <View style={styles.protocolLine}><Text style={styles.protocolKey}>VERIFICAÇÃO</Text><Text style={styles.protocolValue}>Checksum por ficheiro</Text></View>
-        </View>
-
-        <View style={styles.bottomMark}><View style={styles.tinyMark}><View style={styles.tinyLine} /></View><Text style={styles.bottomText}>Feito para mover ficheiros, não para os guardar.</Text></View>
-      </ScrollView>
-    </ScreenContainer>
-  );
+export default function SettingsScreen(){
+ return <ScreenContainer containerClassName="bg-[#F2F2F7]" safeAreaClassName="bg-[#F2F2F7]">
+  <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+   <Text style={s.eyebrow}>PREFERÊNCIAS E PRIVACIDADE</Text><Text style={s.title}>Definições</Text>
+   <Text style={s.intro}>Informação sobre a ligação e as proteções usadas pelo XTransfer Offline.</Text>
+   <Text style={s.section}>REDE LOCAL</Text><View style={s.card}>
+    <InfoRow icon="wifi-tethering" title="Hotspot do telefone" detail="O Android cria a rede local ou permite usar um hotspot ativado manualmente."/>
+    <View style={s.divider}/><InfoRow icon="devices" title="Descoberta de computadores" detail="O Android procura anúncios FD/01 na rede local."/>
+    <View style={s.divider}/><InfoRow icon="link" title="Ligação direta" detail="TCP/TLS na porta 45556. Não utiliza um servidor externo."/>
+   </View>
+   <Text style={s.section}>SEGURANÇA DO ENVIO</Text><View style={s.card}>
+    <InfoRow icon="verified-user" title="TLS 1.2 / 1.3" detail="A aplicação Android valida a fingerprint do certificado Windows antes de enviar dados."/>
+    <View style={s.divider}/><InfoRow icon="password" title="Emparelhamento temporário" detail="Código de seis caracteres, com validade limitada e utilização única."/>
+    <View style={s.divider}/><InfoRow icon="fact-check" title="Integridade SHA-256" detail="Os blocos e o ficheiro completo são verificados antes da confirmação final."/>
+    <View style={s.divider}/><InfoRow icon="restore" title="Retoma" detail="O Windows conserva blocos confirmados para permitir continuar após uma interrupção."/>
+   </View>
+   <View style={s.privacy}><View style={s.privacyIcon}><MaterialIcons name="lock" size={19} color={C.green}/></View><View style={s.rowCopy}><Text style={s.privacyTitle}>Privacidade local</Text><Text style={s.privacyText}>Sem conta, nuvem ou armazenamento remoto. Os ficheiros são transferidos diretamente pela rede local.</Text></View></View>
+   <Text style={s.section}>SOBRE</Text><View style={s.about}>
+    <View style={s.aboutTop}><View style={s.aboutMark}><MaterialIcons name="swap-horizontal-circle" size={25} color="#FFFFFF"/></View><View style={s.rowCopy}><Text style={s.aboutTitle}>XTransfer Offline</Text><Text style={s.aboutSub}>Aplicação Android + Windows</Text></View><View style={s.versionPill}><Text style={s.versionText}>FD/01</Text></View></View>
+    <Text style={s.aboutNote}>A versão atual está em validação. A transferência Windows → Android e o histórico persistente ainda estão em desenvolvimento.</Text>
+   </View><Text style={s.footer}>FEITO PARA TRANSFERIR. NÃO PARA ARMAZENAR.</Text>
+  </ScrollView>
+ </ScreenContainer>;
 }
-
-const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
-  eyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, color: colors.limeDark, marginBottom: 8 },
-  title: { fontSize: 34, fontWeight: "800", letterSpacing: -1.2, color: colors.ink },
-  intro: { fontSize: 13, lineHeight: 19, color: colors.muted, maxWidth: 310, marginTop: 12 },
-  sectionLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.1, color: colors.muted, marginTop: 32, marginBottom: 10 },
-  card: { borderRadius: 18, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14 },
-  settingRow: { flexDirection: "row", alignItems: "center", minHeight: 78, paddingVertical: 11 },
-  settingIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: colors.faint, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  settingCopy: { flex: 1, paddingRight: 8 },
-  settingTitle: { fontSize: 13, fontWeight: "800", color: colors.ink },
-  settingDescription: { fontSize: 11, lineHeight: 15, color: colors.muted, marginTop: 4 },
-  divider: { height: 1, backgroundColor: colors.faint },
-  privacyStrip: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.faint, borderRadius: 12, padding: 11, marginBottom: 13 },
-  privacyText: { flex: 1, fontSize: 10, lineHeight: 15, color: colors.muted },
-  protocolCard: { backgroundColor: colors.ink, borderRadius: 18, padding: 16 },
-  protocolTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 15 },
-  protocolTitle: { color: colors.white, fontSize: 15, fontWeight: "800" },
-  protocolSubtitle: { color: "#AAB4A4", fontSize: 11, marginTop: 4 },
-  versionPill: { backgroundColor: colors.lime, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
-  versionText: { color: colors.ink, fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
-  protocolLine: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: "#344031", paddingTop: 11, marginTop: 11 },
-  protocolKey: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: "#AAB4A4" },
-  protocolValue: { fontSize: 11, fontWeight: "700", color: colors.lime },
-  bottomMark: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 27 },
-  tinyMark: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" },
-  tinyLine: { width: 9, height: 3, borderRadius: 2, backgroundColor: colors.lime },
-  bottomText: { fontSize: 11, color: colors.muted },
+const s=StyleSheet.create({
+ content:{paddingHorizontal:20,paddingTop:20,paddingBottom:40},eyebrow:{color:C.blue,fontSize:10,fontWeight:"800",letterSpacing:1.3,marginBottom:7},
+ title:{color:C.ink,fontSize:34,fontWeight:"800",letterSpacing:-1.1},intro:{color:C.muted,fontSize:13,lineHeight:20,marginTop:12,maxWidth:315},
+ section:{color:C.faint,fontSize:9,fontWeight:"900",letterSpacing:1.2,marginTop:29,marginBottom:9},
+ card:{backgroundColor:C.white,borderRadius:18,borderWidth:1,borderColor:C.line,paddingHorizontal:14},
+ row:{minHeight:73,flexDirection:"row",alignItems:"center",paddingVertical:10},rowIcon:{width:36,height:36,borderRadius:12,backgroundColor:C.blueSoft,alignItems:"center",justifyContent:"center",marginRight:11},
+ rowCopy:{flex:1},rowTitle:{color:C.ink,fontSize:12,fontWeight:"800"},rowDetail:{color:C.muted,fontSize:10,lineHeight:15,marginTop:4},divider:{height:1,backgroundColor:C.line,marginLeft:47},
+ privacy:{backgroundColor:C.greenSoft,borderRadius:17,padding:14,flexDirection:"row",alignItems:"center",gap:11,marginTop:16},
+ privacyIcon:{width:36,height:36,borderRadius:12,backgroundColor:C.white,alignItems:"center",justifyContent:"center"},
+ privacyTitle:{color:C.ink,fontSize:12,fontWeight:"800"},privacyText:{color:C.muted,fontSize:10,lineHeight:15,marginTop:4},
+ about:{backgroundColor:C.white,borderRadius:18,borderWidth:1,borderColor:C.line,padding:15},aboutTop:{flexDirection:"row",alignItems:"center"},
+ aboutMark:{width:42,height:42,borderRadius:14,backgroundColor:C.ink,alignItems:"center",justifyContent:"center",marginRight:11},
+ aboutTitle:{color:C.ink,fontSize:14,fontWeight:"800"},aboutSub:{color:C.muted,fontSize:10,marginTop:4},
+ versionPill:{borderRadius:20,backgroundColor:C.blueSoft,paddingHorizontal:9,paddingVertical:6},versionText:{color:C.blue,fontSize:9,fontWeight:"900"},
+ aboutNote:{borderTopWidth:1,borderTopColor:C.line,marginTop:14,paddingTop:12,color:C.muted,fontSize:10,lineHeight:15},
+ footer:{color:C.faint,fontSize:9,fontWeight:"800",letterSpacing:1,textAlign:"center",marginTop:27}
 });
