@@ -1,65 +1,80 @@
-# Plano do XTransfer Offline
+# Plano técnico — XTransfer Offline
 
-## Produto e primeira entrega
+## Objetivo
 
-XTransfer Offline é o nome de produto pretendido para a aplicação FastDrop. É uma aplicação Android/Windows offline-first para enviar e receber ficheiros grandes através de rede local ou hotspot, sem cabo, internet ou servidor externo. A base atual é um protótipo navegável e um cliente Windows inicial; a auditoria técnica completa está em `docs/PHASE1-AUDIT.md`.
+Desenvolver duas aplicações nativas — Android e Windows — para transferir ficheiros diretamente pela rede local, sem cabo, internet, conta, nuvem ou navegador.
 
-## Arquitetura
+O telefone pode criar o hotspot; o PC liga-se a essa rede. As interfaces de seleção, envio, receção e progresso pertencem às duas aplicações.
 
-- **Expo Router / React Native / TypeScript**: manter o starter móvel fixo e a navegação por tabs.
-- **Camada de domínio local**: `lib/transfer-model.ts` define tipos de dispositivo, ficheiro, transferência e estados de integridade, sem depender de UI.
-- **Estado de demonstração**: o ecrã principal usa dados locais e interações determinísticas para tornar o protótipo avaliável sem rede, conta ou backend.
-- **Futura camada de transporte**: reservar uma interface `TransferTransport` para descoberta LAN/Wi-Fi Direct, handshake com código/QR, chunks retomáveis, checksum e confirmação final. A implementação real deverá usar streaming e armazenamento temporário, sem carregar ficheiros inteiros em memória.
-- **Preparação Windows**: documentar um protocolo versionado e simples, com cliente leve e sem dependência de internet, adequado a Windows 10 Home e PCs com 2 GB de RAM.
+## Estado implementado
 
-## Organização de pastas
+### Android → Windows
 
-- `app/(tabs)/index.tsx`: dashboard do fluxo principal e estado demonstrativo.
-- `app/(tabs)/history.tsx`: histórico local de transferências.
-- `app/(tabs)/settings.tsx`: preferências e princípios de privacidade/ligação.
-- `components/`: elementos reutilizáveis de cartões, barras de progresso e ícones.
-- `lib/transfer-model.ts`: contratos de domínio e dados de exemplo.
-- `assets/images/`: identidade visual e ícones nativos FastDrop.
-- `plan.md` e `TODO.md`: decisões e critérios vivos do produto.
+- Interface Android Expo Router / React Native.
+- Módulo Kotlin para hotspot Android LocalOnlyHotspot e fallback manual.
+- Descoberta Windows por UDP multicast FD/01.
+- Seletor nativo Android SAF com seleção múltipla.
+- Ligação TCP/TLS, TLS 1.2/1.3 e validação obrigatória da fingerprint SHA-256 anunciada pelo Windows.
+- Emparelhamento temporário de seis caracteres e token de sessão.
+- Manifesto, SHA-256 em streaming, chunks até 1 MiB, ACK, retoma e cancelamento.
+- Cliente Windows C# WinForms com listener TLS, validação de manifesto, armazenamento .part, retoma por offset e confirmação SHA-256 final.
 
-## Design
+**Estado:** o fluxo de interface e hotspot-first foi ligado nesta branch. A CI e os testes físicos ainda precisam de validação.
 
-### Estilos considerados
+## Arquitetura de rede
 
-- **Quiet utility / editorial técnico** — probabilidade 0,07: ferramenta calma com bastante espaço, números fortes e acentos de estado.
-- **Neon network / cyber minimal** — probabilidade 0,05: rede local expressa por linhas e brilho tecnológico.
-- **Warm hardware / oficina digital** — probabilidade 0,08: tons terrosos, textura de ferramenta e linguagem mais física.
+1. O Android tenta criar um hotspot local.
+2. Se a API do Android não estiver disponível, o utilizador ativa o hotspot nas Definições.
+3. O PC liga-se à rede Wi-Fi do telefone.
+4. A aplicação Windows anuncia o dispositivo na rede local com FD/01 e a fingerprint do certificado.
+5. O Android descobre o anúncio; o utilizador seleciona o PC e introduz o código temporário.
+6. O Android inicia TCP/TLS para o PC e transmite o manifesto e os ficheiros.
 
-### Escolha: Quiet utility / editorial técnico
+O Windows continua a ser o listener/recetor de FD/01. O telefone é o anfitrião da rede Wi-Fi, não necessariamente o servidor de transferência. A descoberta multicast através do hotspot precisa de teste no Galaxy A16.
 
-- **Movimento de design**: utilitários digitais editoriais, com influência de painéis de instrumentos e publicações técnicas contemporâneas.
-- **Princípios**: clareza antes de decoração; estado sempre visível; ações grandes para uso com uma mão; confiança através de confirmações explícitas.
-- **Filosofia de cor**: fundo marfim muito claro para reduzir fadiga, carvão para hierarquia e verde elétrico-lima como cor própria do FastDrop, comunicando ligação ativa e velocidade. Azul e âmbar aparecem apenas para estados secundários.
-- **Paradigma de layout**: cabeçalho assimétrico com índice de versão/estado, cartões empilhados e uma faixa de ação fixa no fundo; evitar dashboard de grelha rígida.
-- **Elementos de assinatura**: marca circular com seta dupla; etiqueta monoespaçada `OFFLINE / LOCAL`; barras de progresso grossas com cantos suaves.
-- **Interação**: cada gesto deve responder com mudança de estado textual. O CTA principal é único e contextual; cancelar e recomeçar ficam visíveis sem competir com o envio.
-- **Animação**: pulsação discreta no ponto de rede, barra com movimento lento durante envio e transições curtas de 180–240 ms; sem efeitos que pareçam atividade de rede quando a app está parada.
-- **Tipografia**: sistema sans para títulos e corpo; monoespaçada para velocidades, tamanhos, estados e IDs de emparelhamento.
-- **Essência da marca**: “O caminho mais curto entre o teu telemóvel e os teus ficheiros.” Personalidade: direta, confiável, ligeiramente técnica.
-- **Voz**: frases curtas e concretas. Exemplos: “PC encontrado. Pronto para receber.” e “A ligação é local. Os teus ficheiros não saem da rede.”
-- **Marca**: um círculo aberto atravessado por duas setas que se aproximam, sugerindo dois dispositivos sem representar uma nuvem.
-- **Cor proprietária**: lima elétrica `#D8F36A`, usada com moderação em ações, estados ligados e progresso.
+## UX / UI
 
-## Implementação prevista
+Direção visual: interface limpa inspirada no iOS, mantendo identidade própria XTransfer:
+- Fundo agrupado cinzento claro.
+- Cartões brancos e cantos arredondados.
+- Tipografia de sistema, títulos grandes e hierarquia clara.
+- Azul para ações primárias; verde, âmbar e vermelho para estados com significado.
+- Fluxo guiado: hotspot, computador, código, ficheiros e envio.
+- Progresso baseado em eventos reais do módulo nativo.
+- Nenhuma URL local ou instrução para abrir navegador.
+- Estados vazios honestos; não inventar histórico nem operações ainda não implementadas.
 
-1. Reescrever o dashboard principal com dados locais e estados de interação.
-2. Acrescentar tabs de Histórico e Definições para refletir o produto completo.
-3. Criar tipos de domínio e uma camada de dados de exemplo separada da UI.
-4. Atualizar o tema para a paleta FastDrop e atualizar o branding nativo.
-5. Validar com TypeScript, lint e Preview Expo Web; corrigir erros de integração.
-6. Guardar a versão como checkpoint no repositório canónico Manus.
+## Prioridades pendentes
 
-## Limites conscientes desta primeira entrega
+1. Obter CI Android/TypeScript/lint/Gradle e Windows/.NET verde na branch atual.
+2. Testar hotspot gerido e manual no Samsung Galaxy A16.
+3. Validar descoberta multicast e emparelhamento no ASUS VivoBook E410KA.
+4. Testar ficheiros pequenos e grandes, pausa, retoma, cancelamento e SHA-256.
+5. Implementar transporte nativo seguro Windows → Android.
+6. Criar histórico persistente local a partir de eventos reais.
+7. Rever firewall, memória, reconexão e compatibilidade com Windows 10 Home.
 
-A descoberta Android, picker nativo, streaming P2P, emparelhamento, listener TCP, checksum ligado ao transporte e envio bidirecional ainda não são executados pelo protótipo visual. Os dados exibidos no dashboard ainda são demonstrativos e não devem ser tratados como resultados de rede.
+## Segurança
 
-## Fase Windows — cliente de receção leve
+- Não confiar apenas no anúncio UDP.
+- Validar a fingerprint do certificado durante TLS.
+- Exigir código temporário e token de sessão.
+- Validar nomes, IDs, tamanhos e offsets.
+- Verificar chunks e hash final do ficheiro.
+- Não indicar conclusão antes da confirmação do Windows.
+- Não promover builds a produção antes de testes físicos.
 
-O cliente Windows fica em `windows-client/` e usa C# WinForms com bibliotecas nativas .NET, sem Electron e sem dependências de terceiros. A escolha privilegia baixo consumo de memória, arranque rápido e compatibilidade com Windows 10 Home. O projeto é publicado como executável autónomo x64 ou x86.
+## Testes de aceitação
 
-A primeira fatia funcional do cliente é a janela de espera: identidade FastDrop, anúncio UDP multicast FD/01, estado de PC pronto e escolha da pasta de destino. As classes de protocolo, sessão, chunks por offset e SHA-256 já estão separadas para receber o listener HTTP local e o handshake visual na próxima iteração. O ambiente atual é Linux e não possui .NET SDK; por isso a compilação final deve ser executada num PC Windows com o script `windows-client/build.ps1`.
+- [ ] Hotspot Android gerido.
+- [ ] Hotspot Android manual.
+- [ ] Descoberta do Windows através do hotspot.
+- [ ] Rejeição de fingerprint divergente.
+- [ ] Rejeição de código incorreto e expirado.
+- [ ] Envio de fotos, vídeos, PDF, DOCX/XLSX, ZIP e ficheiro vazio.
+- [ ] Interrupção e retoma a partir do último offset confirmado.
+- [ ] Cancelamento com remoção dos blocos parciais da transferência cancelada.
+- [ ] Comparação SHA-256 origem/destino.
+- [ ] Receção Windows → Android através de transporte nativo.
+- [ ] Histórico persistente com estados reais.
+- [ ] Teste de memória e estabilidade no Windows 10 Home.
