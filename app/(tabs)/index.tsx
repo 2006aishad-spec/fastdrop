@@ -75,6 +75,7 @@ export default function HomeScreen() {
   const [isTransferring, setIsTransferring] = useState(false);
   const [progress, setProgress] = useState<TransferProgressEvent | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [transferMode, setTransferMode] = useState<"send" | "receive">("send");
   const device = devices[0] ?? null;
   const selectedBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
   const percent = progress && progress.totalBytes > 0
@@ -228,6 +229,40 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.directionSection}>
+          <Text style={styles.directionLabel}>O QUE QUERES FAZER?</Text>
+          <View style={styles.directionBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: transferMode === "send", disabled: isTransferring }}
+              disabled={isTransferring}
+              onPress={() => setTransferMode("send")}
+              style={[styles.directionButton, transferMode === "send" && styles.directionButtonActive, isTransferring && styles.directionButtonDisabled]}
+            >
+              <MaterialIcons name="upload" size={19} color={transferMode === "send" ? palette.ink : palette.muted} />
+              <View style={styles.directionButtonCopy}>
+                <Text style={[styles.directionButtonText, transferMode === "send" && styles.directionButtonTextActive]}>Enviar</Text>
+                <Text style={styles.directionCaption}>Telefone → PC</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: transferMode === "receive", disabled: isTransferring }}
+              disabled={isTransferring}
+              onPress={() => setTransferMode("receive")}
+              style={[styles.directionButton, transferMode === "receive" && styles.directionButtonActive, isTransferring && styles.directionButtonDisabled]}
+            >
+              <MaterialIcons name="download" size={19} color={transferMode === "receive" ? palette.ink : palette.muted} />
+              <View style={styles.directionButtonCopy}>
+                <Text style={[styles.directionButtonText, transferMode === "receive" && styles.directionButtonTextActive]}>Receber</Text>
+                <Text style={styles.directionCaption}>PC → telefone</Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        {transferMode === "send" ? (
+          <>
         <View style={styles.sectionGap}>
           <SectionLabel eyebrow="01 / DESTINO" title="Escolhe um computador" action="REDE LOCAL" />
           <View style={styles.deviceCard}>
@@ -340,6 +375,22 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+          </>
+        ) : (
+          <View style={styles.receiveCard}>
+            <View style={styles.receiveBadge}>
+              <MaterialIcons name="info-outline" size={19} color={palette.limeDark} />
+            </View>
+            <Text style={styles.receiveTitle}>Receber no telefone</Text>
+            <Text style={styles.receiveText}>
+              Esta direção ainda não está disponível. Nesta versão, podes enviar ficheiros do telefone para o Windows; para receber no telefone, o envio a partir do PC ainda precisa de ser implementado.
+            </Text>
+            <Pressable onPress={() => setTransferMode("send")} style={styles.receiveAction}>
+              <Text style={styles.receiveActionText}>Voltar a Enviar</Text>
+              <MaterialIcons name="arrow-forward" size={18} color={palette.ink} />
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.bottomNote}>
           <MaterialIcons name="lock-outline" size={16} color={palette.muted} />
@@ -353,6 +404,22 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 36 },
+  directionSection: { marginTop: 24 },
+  directionLabel: { fontSize: 10, letterSpacing: 1.1, color: palette.muted, fontWeight: "800", marginBottom: 9 },
+  directionBar: { flexDirection: "row", gap: 9, padding: 5, borderRadius: 16, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line },
+  directionButton: { flex: 1, minHeight: 58, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 7, borderRadius: 12 },
+  directionButtonActive: { backgroundColor: palette.lime },
+  directionButtonDisabled: { opacity: 0.55 },
+  directionButtonCopy: { alignItems: "flex-start" },
+  directionButtonText: { fontSize: 13, fontWeight: "800", color: palette.muted },
+  directionButtonTextActive: { color: palette.ink },
+  directionCaption: { fontSize: 9, color: palette.muted, marginTop: 2 },
+  receiveCard: { marginTop: 24, padding: 20, borderRadius: 18, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line },
+  receiveBadge: { width: 40, height: 40, borderRadius: 13, backgroundColor: palette.faint, alignItems: "center", justifyContent: "center", marginBottom: 13 },
+  receiveTitle: { fontSize: 19, fontWeight: "800", color: palette.ink },
+  receiveText: { fontSize: 13, lineHeight: 19, color: palette.muted, marginTop: 8 },
+  receiveAction: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 17, borderRadius: 12, backgroundColor: palette.lime },
+  receiveActionText: { color: palette.ink, fontSize: 13, fontWeight: "800" },
   topLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   brandMark: { width: 29, height: 29, borderRadius: 15, backgroundColor: palette.ink, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-13deg" }] },
