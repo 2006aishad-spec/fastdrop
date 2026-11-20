@@ -55,7 +55,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const sendSub = addTransferProgressListener(setProgress);
-    const receiveSub = addReceiveProgressListener(setReceiveProgress);
+    const receiveSub = addReceiveProgressListener((event) => {
+      setReceiveProgress(event);
+      if (event.pairingCode) setReceiveSession((current) => current ? { ...current, code: event.pairingCode! } : current);
+    });
     return () => { sendSub.remove(); receiveSub.remove(); };
   }, []);
 
