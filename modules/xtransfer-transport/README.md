@@ -1,56 +1,49 @@
 # XTransfer Offline — módulo de transporte Android
 
-Módulo Expo local, exclusivo para Android, que gere o hotspot local e liga diretamente ao cliente Windows através do protocolo FD/01. Não usa contas, nuvem, HTTP/browser, API remota nem servidor externo.
+Módulo Expo local, exclusivo para Android. Fornece transporte FD/01 nativo nos dois sentidos, sem browser, HTTP, nuvem, conta ou servidor externo.
 
-## Hotspot Android
+## Hotspot e descoberta
 
-- Tenta criar uma rede local com WifiManager.LocalOnlyHotspot.
-- Permite ao utilizador ativar o hotspot manualmente nas Definições quando a API não estiver disponível.
-- A camada hotspot não inicia servidor HTTP nem publica uma página web.
-- O PC Windows liga-se ao hotspot do telefone; a aplicação Android continua a iniciar o transporte FD/01 para o PC.
+- O Android pode criar uma rede local através de `WifiManager.LocalOnlyHotspot`, com alternativa para ativação manual nas Definições.
+- O Windows liga-se ao hotspot do telefone.
+- A descoberta usa multicast UDP `239.255.42.42:45555`.
+- Android anuncia o seu dispositivo enquanto a receção está ativa; Windows também anuncia o seu listener.
+- O anúncio inclui plataforma, porta, identificador e fingerprint SHA-256 do certificado local.
 
-## Descoberta local
+## Android → Windows
 
-- Multicast: 239.255.42.42:45555.
-- Transporte: TCP/TLS na porta 45556.
-- Versão: FD/01.
-- O anúncio Windows inclui o SHA-256 do certificado DER.
-- O Android valida a versão, a porta, o endereço LAN e o formato da fingerprint antes de apresentar o PC.
+1. Android descobre o Windows pela rede local.
+2. Android valida por pinning a fingerprint SHA-256 do certificado Windows.
+3. O utilizador introduz o código temporário apresentado no Windows.
+4. O Android envia manifesto e ficheiros por TLS 1.2/1.3.
+5. Chunks de até 1 MiB são confirmados por ACK e offset.
+6. Windows valida SHA-256 dos chunks e do ficheiro completo antes de finalizar.
 
-## Emparelhamento e TLS
+O seletor de ficheiros Android usa Storage Access Framework (SAF), com leitura em streaming.
 
-1. O Android descobre o endereço LAN anunciado pelo Windows.
-2. O Android liga ao PC por TLS 1.2 ou TLS 1.3.
-3. O certificado apresentado tem de corresponder à fingerprint SHA-256 anunciada.
-4. O Android envia PAIR com o código temporário digitado pelo utilizador.
-5. O Windows responde PAIR_ACCEPTED com o token efémero.
-6. O Android envia AUTH e o manifesto.
+## Windows → Android
 
-A confiança é baseada na comparação exata da fingerprint do certificado, não numa autoridade certificadora pública.
+1. O utilizador ativa a receção na aplicação Android.
+2. Android cria um listener TLS nativo na porta TCP `45557`.
+3. O certificado/chave do Android é mantido no Android Keystore; a fingerprint SHA-256 é anunciada por multicast.
+4. Windows descobre o telefone, valida a fingerprint anunciada e liga por TLS 1.2/1.3.
+5. O utilizador introduz no Windows o código de seis caracteres apresentado pelo Android.
+6. Android valida código temporário, sessão e token antes de aceitar o manifesto.
+7. Os dados são recebidos por streaming em ficheiros parciais privados. Após tamanho e SHA-256 completos, são publicados em `Transferências/XTransfer Offline` através de MediaStore no Android 10 ou superior.
 
-## Seletor e envio
+O código temporário é de utilização única, tem expiração e é renovado após cada tentativa de ligação. As tentativas inválidas são limitadas temporariamente.
 
-- Usa ACTION_OPEN_DOCUMENT / Storage Access Framework com seleção múltipla.
-- Guarda a permissão de leitura persistente quando o fornecedor Android a disponibiliza.
-- Rejeita nomes inválidos e fornecedores que não informem o tamanho do ficheiro.
-- Calcula SHA-256 em streaming.
-- Envia chunks de até 1 MiB; cada chunk é validado e só avança após ACK com o offset esperado.
-- Só apresenta conclusão depois de receber FILE_COMPLETE do Windows.
-- O Windows valida o SHA-256 total antes de finalizar o ficheiro.
+## Pausa, retoma e cancelamento
 
-## Retoma e cancelamento
+- O remetente verifica a ação de pausa/cancelamento entre chunks confirmados.
+- Pausa fecha a ligação num limite seguro; o recetor mantém os blocos parciais e os offsets.
+- Retoma reutiliza os identificadores estáveis da seleção e solicita o offset atual ao recetor, usando um novo emparelhamento.
+- Cancelamento envia `CANCEL`; o recetor confirma antes de eliminar os blocos parciais.
+- Um ficheiro só é declarado concluído depois de validação SHA-256 total.
 
-O transferId identifica a transferência entre sessões. O Windows conserva blocos incompletos em ficheiros .part e devolve o offset atual em RESUME.
+## Limitações e validação pendente
 
-- Pausa fecha a ligação num limite seguro, depois de um chunk confirmado.
-- Retoma exige novo emparelhamento e a mesma seleção com os mesmos identificadores.
-- Cancelamento envia CANCEL num limite seguro entre chunks; o Windows remove os blocos parciais da transferência.
-- Uma desconexão abrupta não marca os dados não confirmados como concluídos.
-
-## Limitações e validação
-
-- Um fornecedor Android que não informe o tamanho do ficheiro é rejeitado.
-- O módulo exige uma build nativa Android; Expo Go não inclui este módulo local.
-- A compilação CI não substitui o teste físico no Samsung Galaxy A16 e ASUS VivoBook E410KA.
-- Descoberta multicast no hotspot, firewall, pausa, retoma, cancelamento e ficheiros grandes precisam de validação física.
-- O sentido Windows → Android ainda não está implementado neste módulo.
+- A aplicação Android exige APK nativo; Expo Go não inclui este módulo.
+- Build/CI não substitui teste de hotspot, multicast, TLS e transferência física.
+- Necessário validar no Samsung Galaxy A16 ↔ ASUS VivoBook E410KA, incluindo ficheiros grandes, pausa, retoma, cancelamento e integridade.
+- Em Android anterior à versão 10, o destino usa a pasta de Downloads específica da aplicação; no Android 10 ou superior, usa a pasta pública Transferências.
