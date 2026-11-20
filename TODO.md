@@ -153,15 +153,18 @@
 
 ## Fase 4.1 — desenho da receção Android e envio Windows
 
-- [ ] Implementar listener TCP/TLS nativo no Android, com chave/certificado persistente no Android Keystore e fingerprint anunciada na rede local.
-- [ ] Publicar anúncio FD/01 do Android por multicast enquanto a receção estiver ativa, sem HTTP e sem browser.
-- [ ] Implementar no Windows a descoberta de dispositivos Android e o modo cliente TCP/TLS.
-- [ ] Implementar seleção de ficheiros no Windows e envio por streaming/chunks de até 1 MiB.
-- [ ] Implementar no Android receção por SAF (seletor de pasta), escrita em streaming e validação SHA-256 antes de confirmar.
-- [ ] Aplicar emparelhamento temporário de utilização única e pinning da fingerprint nos dois sentidos.
-- [ ] Implementar retoma, pausa e cancelamento com estado persistente e offsets confirmados.
-- [ ] Acrescentar testes automatizados de protocolo, TLS, descoberta, chunks, integridade, nomes inválidos, interrupção e retoma.
-- [ ] Executar CI Android e Windows e só disponibilizar novos APK/EXE se ambos passarem.
+- [x] Implementado listener TCP/TLS nativo no Android, com chave/certificado persistente no Android Keystore e fingerprint SHA-256 anunciada na rede local.
+- [x] Implementado anúncio FD/01 do Android por multicast enquanto a receção está ativa, sem HTTP e sem browser.
+- [x] Implementada no Windows a descoberta de dispositivos Android e a ligação cliente TCP/TLS com pinning da fingerprint anunciada.
+- [x] Implementados seleção de ficheiros no Windows e envio por streaming/chunks de até 1 MiB.
+- [x] Implementada receção Android por streaming e publicação dos ficheiros verificados em Transferências / XTransfer Offline (MediaStore no Android 10+).
+- [x] Implementados emparelhamento temporário de utilização única, expiração, limitação de tentativas e pinning da fingerprint nos dois sentidos.
+- [x] Implementados pausa entre chunks confirmados, retoma por offset e cancelamento com confirmação.
+- [ ] Acrescentar testes automatizados específicos de integração Android ↔ Windows, além da compilação/CI.
+- [ ] Confirmar CI Android e Windows verde no commit final da integração e gerar novos APK/EXE.
 - [ ] Testar fisicamente Galaxy A16 ↔ ASUS VivoBook E410KA, incluindo hotspot Android e Wi-Fi local.
+- [ ] Validar firewall, interrupções longas, ficheiros grandes e consumo de RAM no ASUS.
 
-**Decisão de arquitetura:** manter as duas aplicações nativas. O Android poderá atuar como host da rede e servidor FD/01; o Windows terá os dois papéis: servidor para receber envios Android e cliente para enviar ficheiros ao Android. A descoberta deve ser bidirecional. Nenhum fluxo usará navegador, página web, HTTP, cloud ou serviço externo.
+**Decisão de arquitetura:** manter as duas aplicações nativas. Android atua como host da rede e servidor FD/01 para receber; Windows atua como servidor para receber envios Android e cliente para enviar ficheiros ao Android. A descoberta é bidirecional. Nenhum fluxo usa navegador, página web, HTTP, cloud ou serviço externo.
+
+**Estado de release:** código bidirecional integrado na branch de trabalho; não marcar como versão principal nem publicar como estável até passar CI no commit final e os testes físicos obrigatórios.
