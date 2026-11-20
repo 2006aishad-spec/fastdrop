@@ -268,6 +268,7 @@ internal class AndroidReceiveServer(
     val folder = File(context.filesDir, "xtransfer-receive/$transferId").apply { mkdirs() }
     var received = 0L
     var currentFile: String? = null
+    val completedIds = mutableSetOf<String>()
     onProgress(progressMap("receiving", transferId, received, total, "", "A receber ficheiros do Windows."))
 
     while (running.get()) {
@@ -313,7 +314,10 @@ internal class AndroidReceiveServer(
           if (!part.exists() || part.length() != entry.size || !constantTimeEquals(hashFile(part), entry.sha256)) {
             throw SecurityException("SHA-256 final ou tamanho divergente.")
           }
-          publishToDownloads(part, entry)
+          if (!completedIds.contains(id)) {
+            publishToDownloads(part, entry)
+            completedIds.add(id)
+          }
           writeMessage(output, "FILE_COMPLETE", JSONObject().put("fileId", id).put("name", entry.name))
           onProgress(progressMap("file-complete", transferId, received, total, entry.name, "Ficheiro verificado e guardado."))
           currentFile = null
@@ -327,7 +331,11 @@ internal class AndroidReceiveServer(
         else -> throw IllegalArgumentException("Comando FD/01 desconhecido.")
       }
     }
-    if (running.get()) onProgress(progressMap("completed", transferId, total, total, "", "Transferência validada."))
+    if (running.get() && completedIds.size == entries.size) {
+      onProgress(progressMap("completed", transferId, total, total, "", "Todos os ficheiros foram verificados e guardados."))
+    } else if (running.get()) {
+      onProgress(progressMap("paused", transferId, received, total, "", "Ligação encerrada. Os blocos confirmados foram preservados para retoma."))
+    }
   }
 
   private fun publishToDownloads(part: File, entry: FileEntry) {
