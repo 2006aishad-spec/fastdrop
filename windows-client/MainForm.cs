@@ -73,7 +73,14 @@ public sealed class MainForm : Form
         _destinationLabel.Text = _destination; _destinationLabel.AutoEllipsis = true; _destinationLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold); _destinationLabel.ForeColor = Color.FromArgb(24, 32, 24); _destinationLabel.Location = new Point(0, 25); _destinationLabel.Width = 420;
         var chooseButton = new Button { Text = "Pasta", Width = 68, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(216, 243, 106), ForeColor = Color.FromArgb(24, 32, 24), Location = new Point(435, 18) };
         chooseButton.Click += (_, _) => ChooseDestination();
-        destinationPanel.Controls.Add(destinationTitle); destinationPanel.Controls.Add(_destinationLabel); destinationPanel.Controls.Add(chooseButton); root.Controls.Add(destinationPanel, 0, 3); root.SetColumnSpan(destinationPanel, 2);
+        var sendToAndroid = new Button { Text = "Enviar para Android", Width = 148, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(24, 32, 24), ForeColor = Color.White, Location = new Point(514, 18) };
+        sendToAndroid.Click += (_, _) => { using var form = new SendToAndroidForm(_discovery); form.ShowDialog(this); };
+        destinationPanel.Controls.Add(destinationTitle);
+        destinationPanel.Controls.Add(_destinationLabel);
+        destinationPanel.Controls.Add(chooseButton);
+        destinationPanel.Controls.Add(sendToAndroid);
+        root.Controls.Add(destinationPanel, 0, 3);
+        root.SetColumnSpan(destinationPanel, 2);
 
         var footer = new Label { Text = "FD/01   •   TLS   •   streaming por chunks   •   SHA-256   •   sem conta", AutoSize = true, Font = new Font("Consolas", 9F), ForeColor = Color.FromArgb(111, 117, 107), Anchor = AnchorStyles.Left | AnchorStyles.Bottom, Dock = DockStyle.Bottom };
         root.Controls.Add(footer, 0, 4); root.SetColumnSpan(footer, 2);
