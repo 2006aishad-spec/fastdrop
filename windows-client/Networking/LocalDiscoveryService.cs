@@ -41,7 +41,8 @@ public sealed class LocalDiscoveryService : IAsyncDisposable
 
     public event Action<DiscoveryAnnouncement>? AnnouncementSent;
     public event Action<DiscoveredAndroidDevice>? AndroidDeviceDiscovered;
-    public IReadOnlyCollection<DiscoveredAndroidDevice> AndroidDevices => _androidDevices.Values.ToArray();
+    public IReadOnlyCollection<DiscoveredAndroidDevice> AndroidDevices => _androidDevices.Values
+        .Where(x => DateTimeOffset.UtcNow - x.LastSeen < TimeSpan.FromSeconds(12)).ToArray();
 
     public void Start()
     {
@@ -60,7 +61,7 @@ public sealed class LocalDiscoveryService : IAsyncDisposable
         var joined = false;
         foreach (var network in NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (network.OperationalStatus != OperationalStatus.Up) continue;
+            if (network.OperationalStatus != OperationalStatus.Up || !network.SupportsMulticast) continue;
             foreach (var address in network.GetIPProperties().UnicastAddresses
                          .Where(x => x.Address.AddressFamily == AddressFamily.InterNetwork))
             {
@@ -69,7 +70,7 @@ public sealed class LocalDiscoveryService : IAsyncDisposable
                     receiver.JoinMulticastGroup(group, address.Address);
                     joined = true;
                 }
-                catch (SocketException) { }
+                catch (Exception) { }
             }
         }
         if (!joined) receiver.JoinMulticastGroup(group);
