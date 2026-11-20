@@ -44,6 +44,7 @@ private const val MAX_LINE_BYTES = 64 * 1024
 private const val MAX_CHUNK_BYTES = 1024 * 1024
 private const val PICK_FILES_REQUEST = 45557
 private const val PROGRESS_EVENT = "onTransferProgress"
+private const val RECEIVE_PROGRESS_EVENT = "onReceiveProgress"
 
 private enum class TransferAction { NONE, PAUSE, CANCEL }
 private class TransferControl { @Volatile var action: TransferAction = TransferAction.NONE }
@@ -56,10 +57,35 @@ class XTransferTransportModule : Module() {
   private val activeTransfer = AtomicReference<TransferControl?>(null)
   private val pendingPicker = AtomicReference<Promise?>(null)
   private val hotspotReservation = AtomicReference<WifiManager.LocalOnlyHotspotReservation?>(null)
+  private val receiveServer = AtomicReference<AndroidReceiveServer?>(null)
 
   override fun definition() = ModuleDefinition {
     Name("XTransferTransport")
-    Events(PROGRESS_EVENT)
+    Events(PROGRESS_EVENT, RECEIVE_PROGRESS_EVENT)
+
+    AsyncFunction("startReceiving") { promise: Promise ->
+      executor.execute {
+        try {
+          var server = receiveServer.get()
+          if (server == null) {
+            val context = appContext.reactContext?.applicationContext
+              ?: throw IllegalStateException("Contexto Android indisponível.")
+            val created = AndroidReceiveServer(context) { progress -> sendEvent(RECEIVE_PROGRESS_EVENT, progress) }
+            if (receiveServer.compareAndSet(null, created)) server = created else created.stop()
+            server = receiveServer.get()
+          }
+          val session = server!!.start()
+          promise.resolve(mapOf("code" to session.code, "port" to session.port, "fingerprint" to session.fingerprint))
+        } catch (error: Exception) {
+          promise.reject("RECEIVER_START_FAILED", error.message ?: "Não foi possível iniciar a receção.", error)
+        }
+      }
+    }
+
+    AsyncFunction("stopReceiving") {
+      receiveServer.getAndSet(null)?.stop()
+      true
+    }
 
     AsyncFunction("scanDevices") { durationMs: Double, promise: Promise ->
       val boundedDuration = durationMs.toLong().coerceIn(1000L, 15000L)
@@ -185,6 +211,7 @@ class XTransferTransportModule : Module() {
     OnDestroy {
       activeTransfer.get()?.action = TransferAction.CANCEL
       try { hotspotReservation.getAndSet(null)?.close() } catch (_: Exception) { }
+      receiveServer.getAndSet(null)?.stop()
       executor.shutdownNow()
     }
   }
