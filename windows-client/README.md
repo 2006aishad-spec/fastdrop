@@ -74,3 +74,19 @@ O workflow `.github/workflows/windows-client.yml` executa restore, build, testes
 - A regra automática e restrita do Firewall do Windows ainda não foi implementada.
 - Ainda não houve teste físico entre Android e Windows nem validação específica no Windows 10 Home, no ASUS VivoBook E410KA ou numa máquina com 2 GB de RAM.
 - Esta fase valida o servidor Windows e a transferência de teste em CI; não significa que o produto já transfira ficheiros entre o Samsung e o PC.
+
+## Transferência bidirecional — implementação nativa
+
+A aplicação Windows agora inclui um modo de envio para Android na janela principal, sem browser:
+
+- Recebe anúncios Android FD/01 por multicast UDP na porta 45555 e mantém a lista de telefones descobertos.
+- O Android disponibiliza o listener TCP/TLS na porta 45557 apenas enquanto a receção está ativa.
+- O Windows valida por pinning a fingerprint SHA-256 recebida no anúncio antes de iniciar o emparelhamento.
+- O utilizador seleciona ficheiros, escolhe o telefone e introduz o código temporário apresentado no Android.
+- O remetente calcula SHA-256, envia manifesto e chunks até 1 MiB, valida ACK/offset e espera por FILE_COMPLETE.
+- Pausa fecha a ligação após o último chunk confirmado; retoma repete o mesmo conjunto de ficheiros e reaproveita offsets confirmados.
+- Cancelamento usa o comando FD/01 CANCEL e espera pela confirmação do Android.
+
+A compilação Windows em CI já validou o novo projeto de envio/descovery até ao commit que inclui as classes de transporte e a janela de envio. É necessário confirmar novamente a execução mais recente após as alterações de integração da janela principal.
+
+**Não é ainda uma versão final validada em hardware.** A descoberta multicast através do hotspot, a receção Android, a firewall do Windows e a transferência real entre Samsung Galaxy A16 e ASUS VivoBook E410KA precisam de teste físico.
