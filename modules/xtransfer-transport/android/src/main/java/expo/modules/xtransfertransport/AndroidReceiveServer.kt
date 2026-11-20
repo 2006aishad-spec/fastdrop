@@ -176,6 +176,14 @@ internal class AndroidReceiveServer(
         socket.broadcast = true
         val group = InetAddress.getByName(GROUP)
         while (running.get()) {
+          if (!consumed && System.currentTimeMillis() >= expiresAt) {
+            code = createPairingCode()
+            expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
+            pairingFailures = 0
+            blockedUntil = 0L
+            onProgress(progressMap("ready", "", 0L, 0L, "", "O código expirou. Um novo código está disponível.")
+              .plus("pairingCode" to code))
+          }
           val announcement = JSONObject()
             .put("deviceId", deviceId)
             .put("deviceName", (Build.MODEL ?: "Android").take(80))
@@ -199,6 +207,11 @@ internal class AndroidReceiveServer(
       var client: SSLSocket? = null
       try {
         client = server.accept() as SSLSocket
+        if (!isPrivateAddress(client.inetAddress)) {
+          try { client.close() } catch (_: Exception) { }
+          client = null
+          continue
+        }
         client.soTimeout = 30_000
         client.tcpNoDelay = true
         client.enabledProtocols = client.supportedProtocols
@@ -213,7 +226,7 @@ internal class AndroidReceiveServer(
         if (running.get()) Log.w("XTransferOffline", "Ligação recebida rejeitada: ${error.message}")
       } finally {
         try { client?.close() } catch (_: Exception) { }
-        if (running.get()) {
+        if (running.get() && client != null && consumed) {
           code = createPairingCode()
           expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
           consumed = false
