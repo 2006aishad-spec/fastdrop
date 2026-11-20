@@ -69,6 +69,8 @@ internal class AndroidReceiveServer(
   @Volatile private var code = ""
   @Volatile private var expiresAt = 0L
   @Volatile private var consumed = false
+  @Volatile private var pairingFailures = 0
+  @Volatile private var blockedUntil = 0L
   @Volatile private var fingerprint = ""
   @Volatile private var deviceId = ""
   private var serverThread: Thread? = null
@@ -86,6 +88,8 @@ internal class AndroidReceiveServer(
       code = createPairingCode()
       expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
       consumed = false
+      pairingFailures = 0
+      blockedUntil = 0L
 
       val server = tls.first.serverSocketFactory.createServerSocket(
         PORT, 8, InetAddress.getByName("0.0.0.0")
@@ -213,6 +217,8 @@ internal class AndroidReceiveServer(
           code = createPairingCode()
           expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
           consumed = false
+          pairingFailures = 0
+          blockedUntil = 0L
           onProgress(progressMap("ready", "", 0L, 0L, "", "Novo código de emparelhamento disponível.")
             .plus("pairingCode" to code))
         }
@@ -229,12 +235,23 @@ internal class AndroidReceiveServer(
     val senderId = pair.optString("deviceId")
     val submittedCode = pair.optString("code").uppercase()
     val nonce = pair.optString("nonce")
+    val now = System.currentTimeMillis()
+    if (now < blockedUntil) {
+      writeMessage(output, "PAIR_REJECTED", JSONObject().put("message", "Demasiadas tentativas. Aguarda antes de tentar novamente."))
+      return
+    }
     if (senderId.isBlank() || senderId.length > 128 || nonce.isBlank() || nonce.length > 128 ||
-      System.currentTimeMillis() >= expiresAt || consumed || !constantTimeEquals(code, submittedCode)) {
+      now >= expiresAt || consumed || !constantTimeEquals(code, submittedCode)) {
+      pairingFailures += 1
+      if (pairingFailures >= 5) {
+        blockedUntil = now + 60_000L
+        pairingFailures = 0
+      }
       writeMessage(output, "PAIR_REJECTED", JSONObject().put("message", "Código incorreto, expirado ou já utilizado."))
       return
     }
 
+    pairingFailures = 0
     consumed = true
     val sessionId = UUID.randomUUID().toString().replace("-", "")
     val token = ByteArray(32).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 0xff) }
@@ -275,6 +292,7 @@ internal class AndroidReceiveServer(
     val folder = File(context.filesDir, "xtransfer-receive/$transferId").apply { mkdirs() }
     var received = 0L
     var currentFile: String? = null
+    var cancelled = false
     val completedIds = mutableSetOf<String>()
     onProgress(progressMap("receiving", transferId, received, total, "", "A receber ficheiros do Windows."))
 
@@ -330,14 +348,15 @@ internal class AndroidReceiveServer(
             publishToDownloads(part, entry)
             marker.writeText(entry.sha256)
             part.delete()
-            completedIds.add(id)
           }
+          completedIds.add(id)
           writeMessage(output, "FILE_COMPLETE", JSONObject().put("fileId", id).put("name", entry.name))
           onProgress(progressMap("file-complete", transferId, received, total, entry.name, "Ficheiro verificado e guardado."))
           currentFile = null
         }
         line == "CANCEL" || line.startsWith("CANCEL ") -> {
           folder.listFiles()?.forEach { try { it.delete() } catch (_: Exception) { } }
+          cancelled = true
           writeMessage(output, "CANCELLED", JSONObject().put("transferId", transferId))
           onProgress(progressMap("cancelled", transferId, received, total, "", "Transferência cancelada pelo Windows."))
           break
@@ -345,9 +364,9 @@ internal class AndroidReceiveServer(
         else -> throw IllegalArgumentException("Comando FD/01 desconhecido.")
       }
     }
-    if (running.get() && completedIds.size == entries.size) {
+    if (running.get() && !cancelled && completedIds.size == entries.size) {
       onProgress(progressMap("completed", transferId, total, total, "", "Todos os ficheiros foram verificados e guardados."))
-    } else if (running.get()) {
+    } else if (running.get() && !cancelled) {
       onProgress(progressMap("paused", transferId, received, total, "", "Ligação encerrada. Os blocos confirmados foram preservados para retoma."))
     }
   }
