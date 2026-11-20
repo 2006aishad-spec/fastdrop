@@ -66,6 +66,7 @@ internal class AndroidReceiveServer(
   private val running = AtomicBoolean(false)
   private val random = SecureRandom()
   @Volatile private var listener: SSLServerSocket? = null
+  @Volatile private var activeClient: SSLSocket? = null
   @Volatile private var code = ""
   @Volatile private var expiresAt = 0L
   @Volatile private var consumed = false
@@ -116,6 +117,8 @@ internal class AndroidReceiveServer(
 
   fun stop() {
     running.set(false)
+    try { activeClient?.close() } catch (_: Exception) { }
+    activeClient = null
     try { listener?.close() } catch (_: Exception) { }
     listener = null
     try { multicastLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) { }
@@ -207,8 +210,10 @@ internal class AndroidReceiveServer(
       var client: SSLSocket? = null
       try {
         client = server.accept() as SSLSocket
+        activeClient = client
         if (!isPrivateAddress(client.inetAddress)) {
           try { client.close() } catch (_: Exception) { }
+          activeClient = null
           client = null
           continue
         }
@@ -226,6 +231,7 @@ internal class AndroidReceiveServer(
         if (running.get()) Log.w("XTransferOffline", "Ligação recebida rejeitada: ${error.message}")
       } finally {
         try { client?.close() } catch (_: Exception) { }
+        activeClient = null
         if (running.get() && client != null && consumed) {
           code = createPairingCode()
           expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
