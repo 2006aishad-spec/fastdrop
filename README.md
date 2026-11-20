@@ -8,65 +8,66 @@ O repositório continua a chamar-se **FastDrop** por razões históricas. O nome
 
 - Aplicação Android instalável (APK) e aplicação Windows nativa (EXE).
 - O telefone pode criar o hotspot; o PC liga-se à rede Wi-Fi do telefone.
-- Seleção, envio e receção devem acontecer dentro das aplicações nativas.
+- Seleção, envio e receção acontecem dentro das aplicações nativas.
 - Transferência nos dois sentidos: Android → Windows e Windows → Android.
 - Sem navegador, internet, contas, cloud ou serviços externos.
 - TLS, emparelhamento temporário, progresso real, pausa/retoma, cancelamento e verificação SHA-256.
 
-## Estado atual desta branch
+## Estado atual da branch de trabalho
 
 ### Android
 
-O ecrã principal foi ligado ao transporte nativo FD/01 e recebeu uma revisão visual inspirada no iOS: fundo agrupado, cartões claros, títulos grandes, botões azuis, estados legíveis e navegação inferior simplificada.
+O ecrã principal foi ligado ao transporte nativo FD/01 e recebeu uma revisão visual inspirada no iOS.
 
 O módulo Kotlin:
-- Tenta criar uma rede local através de WifiManager.LocalOnlyHotspot.
-- Permite usar um hotspot ativado manualmente nas Definições do Android.
-- Descobre o cliente Windows através de UDP multicast FD/01.
-- Abre uma ligação TCP/TLS e valida a fingerprint SHA-256 do certificado Windows.
-- Emparelha através do código temporário de seis caracteres.
-- Envia manifesto e ficheiros em chunks até 1 MiB, com ACK e SHA-256.
-- Emite eventos de progresso e suporta cancelamento.
-
-O servidor HTTP experimental e a página web foram removidos do módulo Android. A aplicação não apresenta URLs nem pede para abrir um navegador.
+- Tenta criar uma rede local através de `WifiManager.LocalOnlyHotspot` e oferece alternativa para hotspot manual.
+- Descobre o Windows por UDP multicast e valida a fingerprint SHA-256 do certificado.
+- Envia ficheiros para Windows por TLS, manifesto, chunks até 1 MiB, ACK e SHA-256.
+- Oferece um listener TLS nativo para receber ficheiros enviados pelo Windows.
+- Mantém a chave/certificado de receção no Android Keystore e anuncia a respetiva fingerprint.
+- Mostra um código temporário de seis caracteres, de utilização única, com expiração e rotação após ligação.
+- Guarda blocos parciais na área privada da aplicação; após verificação integral, publica os ficheiros em `Transferências/XTransfer Offline` através de MediaStore no Android 10 ou superior.
+- Suporta pausa/retoma e cancelamento nos fluxos de envio/receção.
 
 ### Windows
 
-Existe uma aplicação desktop nativa C# WinForms em windows-client/. Ela anuncia o PC na rede local, apresenta um código temporário, recebe ligações TLS na porta 45556, recebe ficheiros por chunks, permite retoma e verifica SHA-256 antes de finalizar os ficheiros.
+Existe uma aplicação desktop nativa C# WinForms em `windows-client/`. Mantém o listener TLS na porta 45556 para receber ficheiros Android e inclui um modo de envio nativo para Android:
+- Anuncia o PC e recebe anúncios Android por multicast.
+- Descobre o telefone, valida o pin da fingerprint TLS e emparelha pelo código apresentado no Android.
+- Permite escolher ficheiros e enviar por streaming em chunks até 1 MiB.
+- Valida ACK, offsets e confirmação de conclusão; suporta pausa, retoma e cancelamento.
 
-O papel atual do Windows é receber os ficheiros enviados pelo Android. A aplicação Windows ainda não tem o fluxo nativo de envio para Android.
+### Protocolo e rede
 
-### Limitações ainda abertas
+- Descoberta: UDP multicast `239.255.42.42:45555`.
+- Windows recebe Android na porta TCP/TLS `45556`.
+- Android recebe Windows na porta TCP/TLS `45557`.
+- Transporte: TLS 1.2/1.3, código temporário, token de sessão, manifesto, chunks, ACK e SHA-256.
 
-- A compilação Android/Gradle e os testes automatizados têm de passar após estas alterações.
-- A descoberta multicast através do hotspot do Galaxy A16 ainda precisa de teste físico.
-- A transferência Windows → Android ainda não está implementada.
-- O histórico persistente baseado em transferências reais ainda não está implementado; o ecrã apresenta um estado vazio honesto.
-- A utilização do hotspot gerido pelo Android pode variar conforme a versão do sistema e o fabricante.
+## O que ainda impede declarar a versão final
 
-Não considerar a aplicação pronta para produção antes dos testes físicos no Samsung Galaxy A16 e no ASUS VivoBook E410KA.
+O código bidirecional está integrado nesta branch, mas a integração precisa de validação final. A compilação CI não prova, por si só, que o hotspot, multicast, TLS e firewall funcionem corretamente nos dispositivos reais.
 
-## Protocolo FD/01
+Testes físicos obrigatórios:
+- Galaxy A16 cria hotspot e o ASUS VivoBook E410KA liga-se a ele.
+- Descoberta nos dois sentidos.
+- Envio Android → Windows e Windows → Android.
+- Código errado/expirado/reutilizado e fingerprint divergente são rejeitados.
+- Ficheiros vazios, fotos, vídeos, PDF, ZIP e ficheiros grandes.
+- Pausa, perda de ligação, retoma, cancelamento e comparação SHA-256.
+- Verificação de consumo de RAM e comportamento da firewall no Windows 10 Home.
 
-A implementação reutiliza o protocolo FD/01 existente para Android → Windows:
-- UDP multicast 239.255.42.42:45555 para descoberta.
-- TCP/TLS na porta 45556, com TLS 1.2/1.3.
-- Validação no Android da fingerprint SHA-256 do certificado anunciado pelo Windows.
-- Código de emparelhamento temporário e token de sessão.
-- Manifesto de ficheiros, chunks até 1 MiB e ACK por chunk.
-- Retoma por offset, cancelamento e verificação SHA-256 final no Windows.
-
-Estes mecanismos existem no código do protocolo. A operação no hotspot-first e a compatibilidade real entre os dois equipamentos ainda precisam de validação em hardware.
+O histórico persistente completo ainda não está implementado. Não considerar esta branch uma versão de produção ou release estável até a CI final passar e os testes físicos serem concluídos.
 
 ## Estrutura do projeto
 
-- app/: interface Android em Expo Router / React Native.
-- modules/xtransfer-transport/: módulo Kotlin de hotspot, descoberta e transporte.
-- windows-client/: aplicação Windows nativa C# WinForms.
-- lib/fd01-protocol.md: especificação do protocolo.
-- docs/: auditorias e pesquisa técnica.
-- TODO.md: estado das tarefas.
-- plan.md: plano técnico.
+- `app/`: interface Android em Expo Router / React Native.
+- `modules/xtransfer-transport/`: módulo Kotlin de hotspot, descoberta e transporte.
+- `windows-client/`: aplicação Windows nativa C# WinForms.
+- `lib/fd01-protocol.md`: especificação do protocolo.
+- `docs/`: auditorias, pesquisa e arquitetura bidirecional.
+- `TODO.md`: estado das tarefas.
+- `plan.md`: plano técnico.
 
 ## Desenvolvimento Android
 
