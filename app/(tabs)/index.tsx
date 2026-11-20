@@ -138,8 +138,14 @@ export default function HomeScreen() {
       if (result.status === "completed") {
         setNotice((result.fileCount ?? files.length) + " ficheiro(s) enviados e verificados no Windows.");
         setFiles([]); setCode(""); setActiveTransferId(null);
-      } else if (result.status === "paused") setNotice("Transferência pausada. Os blocos confirmados estão disponíveis para retoma.");
-      else { setNotice("Transferência cancelada."); setActiveTransferId(null); }
+      } else if (result.status === "paused") {
+        setNotice("Transferência pausada. Consulta o novo código no Windows e introduz-o antes de retomar.");
+        setCode("");
+      } else {
+        setNotice("Transferência cancelada.");
+        setActiveTransferId(null);
+        setCode("");
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "A transferência não foi concluída."); }
     finally { setSending(false); }
   }, [activeTransferId, code, device, files]);
