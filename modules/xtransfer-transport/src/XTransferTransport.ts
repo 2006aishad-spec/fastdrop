@@ -13,7 +13,7 @@ export type TransferProgressEvent = {
 export type TransferResult = { status: "completed" | "paused" | "cancelled"; transferId: string; fileCount?: number; totalBytes?: number };
 export type HotspotSession = { managedHotspot: boolean; ssid?: string | null; password?: string | null };
 export type ReceiveSession = { code: string; port: number; fingerprint: string };
-export type ReceiveProgressEvent = { status: string; transferId: string; sentBytes: number; totalBytes: number; currentFile: string; message: string };
+export type ReceiveProgressEvent = { status: string; transferId: string; sentBytes: number; totalBytes: number; currentFile: string; message: string; pairingCode?: string };
 type XTransferTransportEvents = { onTransferProgress(event: TransferProgressEvent): void; onReceiveProgress(event: ReceiveProgressEvent): void };
 declare class NativeXTransferTransport extends NativeModule<XTransferTransportEvents> {
   scanDevices(durationMs: number): Promise<DiscoveredWindowsDevice[]>;
