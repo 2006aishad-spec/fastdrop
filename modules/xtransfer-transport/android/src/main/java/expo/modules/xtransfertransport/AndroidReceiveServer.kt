@@ -209,6 +209,13 @@ internal class AndroidReceiveServer(
         if (running.get()) Log.w("XTransferOffline", "Ligação recebida rejeitada: ${error.message}")
       } finally {
         try { client?.close() } catch (_: Exception) { }
+        if (running.get()) {
+          code = createPairingCode()
+          expiresAt = System.currentTimeMillis() + 5 * 60 * 1000L
+          consumed = false
+          onProgress(progressMap("ready", "", 0L, 0L, "", "Novo código de emparelhamento disponível.")
+            .plus("pairingCode" to code))
+        }
       }
     }
   }
@@ -280,8 +287,11 @@ internal class AndroidReceiveServer(
           val entry = entries[id] ?: throw IllegalArgumentException("Ficheiro não pertence ao manifesto.")
           currentFile = id
           val part = partFile(folder, id)
+          val marker = doneFile(folder, id)
+          val alreadyComplete = marker.exists() && marker.readText().trim() == entry.sha256
           if (part.length() > entry.size) part.delete()
-          writeMessage(output, "RESUME", JSONObject().put("fileId", id).put("offset", if (part.exists()) part.length() else 0L))
+          val offset = if (alreadyComplete) entry.size else if (part.exists()) part.length() else 0L
+          writeMessage(output, "RESUME", JSONObject().put("fileId", id).put("offset", offset))
         }
         line.startsWith("CHUNK ") -> {
           val header = JSONObject(line.substring(6))
@@ -310,19 +320,23 @@ internal class AndroidReceiveServer(
           val entry = entries[id] ?: throw IllegalArgumentException("Ficheiro não pertence ao manifesto.")
           if (end.optString("sha256").lowercase() != entry.sha256) throw SecurityException("Hash final do manifesto divergente.")
           val part = partFile(folder, id)
-          if (!part.exists() && entry.size == 0L) part.createNewFile()
-          if (!part.exists() || part.length() != entry.size || !constantTimeEquals(hashFile(part), entry.sha256)) {
-            throw SecurityException("SHA-256 final ou tamanho divergente.")
-          }
-          if (!completedIds.contains(id)) {
+          val marker = doneFile(folder, id)
+          val alreadyComplete = marker.exists() && marker.readText().trim() == entry.sha256
+          if (!alreadyComplete) {
+            if (!part.exists() && entry.size == 0L) part.createNewFile()
+            if (!part.exists() || part.length() != entry.size || !constantTimeEquals(hashFile(part), entry.sha256)) {
+              throw SecurityException("SHA-256 final ou tamanho divergente.")
+            }
             publishToDownloads(part, entry)
+            marker.writeText(entry.sha256)
+            part.delete()
             completedIds.add(id)
           }
           writeMessage(output, "FILE_COMPLETE", JSONObject().put("fileId", id).put("name", entry.name))
           onProgress(progressMap("file-complete", transferId, received, total, entry.name, "Ficheiro verificado e guardado."))
           currentFile = null
         }
-        line == "CANCEL" -> {
+        line == "CANCEL" || line.startsWith("CANCEL ") -> {
           folder.listFiles()?.forEach { try { it.delete() } catch (_: Exception) { } }
           writeMessage(output, "CANCELLED", JSONObject().put("transferId", transferId))
           onProgress(progressMap("cancelled", transferId, received, total, "", "Transferência cancelada pelo Windows."))
@@ -390,6 +404,13 @@ internal class AndroidReceiveServer(
     if (!validId(id)) throw IllegalArgumentException("ID de ficheiro inválido.")
     val file = File(folder, "$id.part").canonicalFile
     if (file.parentFile != folder.canonicalFile) throw SecurityException("Caminho de ficheiro inválido.")
+    return file
+  }
+
+  private fun doneFile(folder: File, id: String): File {
+    if (!validId(id)) throw IllegalArgumentException("ID de ficheiro inválido.")
+    val file = File(folder, "$id.done").canonicalFile
+    if (file.parentFile != folder.canonicalFile) throw SecurityException("Caminho de marcador inválido.")
     return file
   }
 
