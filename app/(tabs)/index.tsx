@@ -78,11 +78,12 @@ export default function HomeScreen() {
   const closeHotspot = useCallback(async () => {
     setHotspotBusy(true); setError(null);
     try {
+      if (receiveSession) { await stopReceiving(); setReceiveSession(null); }
       await stopLocalHotspot(); setHotspot(null); setDevices([]); setDevice(null);
       setNotice("Sessão de hotspot encerrada.");
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível encerrar o hotspot."); }
     finally { setHotspotBusy(false); }
-  }, []);
+  }, [receiveSession]);
 
   const scan = useCallback(async () => {
     if (!hotspot) { setError("Ativa primeiro o hotspot do telefone."); return; }
