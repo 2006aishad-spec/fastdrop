@@ -12,7 +12,9 @@ export type TransferProgressEvent = {
 };
 export type TransferResult = { status: "completed" | "paused" | "cancelled"; transferId: string; fileCount?: number; totalBytes?: number };
 export type HotspotSession = { managedHotspot: boolean; ssid?: string | null; password?: string | null };
-type XTransferTransportEvents = { onTransferProgress(event: TransferProgressEvent): void };
+export type ReceiveSession = { code: string; port: number; fingerprint: string };
+export type ReceiveProgressEvent = { status: string; transferId: string; sentBytes: number; totalBytes: number; currentFile: string; message: string };
+type XTransferTransportEvents = { onTransferProgress(event: TransferProgressEvent): void; onReceiveProgress(event: ReceiveProgressEvent): void };
 declare class NativeXTransferTransport extends NativeModule<XTransferTransportEvents> {
   scanDevices(durationMs: number): Promise<DiscoveredWindowsDevice[]>;
   pickFiles(): Promise<Array<Omit<PickedTransferFile, "fileId">>>;
@@ -20,6 +22,8 @@ declare class NativeXTransferTransport extends NativeModule<XTransferTransportEv
   cancelTransfer(): Promise<boolean>;
   startLocalHotspot(useLocalHotspot: boolean): Promise<HotspotSession>;
   stopLocalHotspot(): Promise<boolean>;
+  startReceiving(): Promise<ReceiveSession>;
+  stopReceiving(): Promise<boolean>;
 }
 let nativeModule: NativeXTransferTransport | null = null;
 function getNativeModule(): NativeXTransferTransport {
@@ -37,6 +41,12 @@ export async function sendTransferFiles(device: DiscoveredWindowsDevice, code: s
 export async function cancelTransfer() { return getNativeModule().cancelTransfer(); }
 export async function startLocalHotspot(useLocalHotspot = true) { return getNativeModule().startLocalHotspot(useLocalHotspot); }
 export async function stopLocalHotspot() { return getNativeModule().stopLocalHotspot(); }
+export async function startReceiving() { return getNativeModule().startReceiving(); }
+export async function stopReceiving() { return getNativeModule().stopReceiving(); }
+export function addReceiveProgressListener(listener: (event: ReceiveProgressEvent) => void): { remove: () => void } {
+  if (Platform.OS !== "android") return { remove: () => undefined };
+  return getNativeModule().addListener("onReceiveProgress", listener);
+}
 export function addTransferProgressListener(listener: (event: TransferProgressEvent) => void): { remove: () => void } {
   if (Platform.OS !== "android") return { remove: () => undefined };
   return getNativeModule().addListener("onTransferProgress", listener);
