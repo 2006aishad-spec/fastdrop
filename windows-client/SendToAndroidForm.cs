@@ -249,11 +249,11 @@ public sealed class SendToAndroidForm : Form
             _progress.Text = result switch
             {
                 "completed" => "Transferência concluída. O Android verificou os ficheiros.",
-                "paused" => "Transferência pausada. Clica em Enviar / Retomar para continuar.",
+                "paused" => "Transferência pausada. Consulta o novo código no Android e introduz-o antes de retomar.",
                 "cancelled" => "Transferência cancelada no Android.",
                 _ => "Estado da transferência: " + result
             };
-            if (result == "completed" || result == "cancelled") _code.Clear();
+            if (result == "completed" || result == "cancelled" || result == "paused") _code.Clear();
         }
         catch (Exception error)
         {
