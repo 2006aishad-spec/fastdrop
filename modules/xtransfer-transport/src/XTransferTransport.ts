@@ -19,6 +19,7 @@ declare class NativeXTransferTransport extends NativeModule<XTransferTransportEv
   scanDevices(durationMs: number): Promise<DiscoveredWindowsDevice[]>;
   pickFiles(): Promise<Array<Omit<PickedTransferFile, "fileId">>>;
   sendFiles(device: DiscoveredWindowsDevice, code: string, files: PickedTransferFile[], transferId: string): Promise<TransferResult>;
+  pauseTransfer(): Promise<boolean>;
   cancelTransfer(): Promise<boolean>;
   startLocalHotspot(useLocalHotspot: boolean): Promise<HotspotSession>;
   stopLocalHotspot(): Promise<boolean>;
@@ -38,6 +39,7 @@ export async function pickTransferFiles(): Promise<Array<Omit<PickedTransferFile
 export async function sendTransferFiles(device: DiscoveredWindowsDevice, code: string, files: PickedTransferFile[], transferId: string) {
   return getNativeModule().sendFiles(device, code, files, transferId);
 }
+export async function pauseTransfer() { return getNativeModule().pauseTransfer(); }
 export async function cancelTransfer() { return getNativeModule().cancelTransfer(); }
 export async function startLocalHotspot(useLocalHotspot = true) { return getNativeModule().startLocalHotspot(useLocalHotspot); }
 export async function stopLocalHotspot() { return getNativeModule().stopLocalHotspot(); }
