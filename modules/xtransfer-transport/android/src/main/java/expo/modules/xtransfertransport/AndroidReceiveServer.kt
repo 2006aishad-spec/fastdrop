@@ -349,6 +349,7 @@ internal class AndroidReceiveServer(
           val end = JSONObject(line.substring(9))
           val id = end.optString("fileId")
           val entry = entries[id] ?: throw IllegalArgumentException("Ficheiro não pertence ao manifesto.")
+          if (currentFile != id) throw IllegalArgumentException("FILE_BEGIN obrigatório antes de FILE_END.")
           if (end.optString("sha256").lowercase() != entry.sha256) throw SecurityException("Hash final do manifesto divergente.")
           val part = partFile(folder, id)
           val marker = doneFile(folder, id)
