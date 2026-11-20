@@ -70,8 +70,8 @@ public sealed class MainForm : Form
 
         var destinationPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
         var destinationTitle = new Label { Text = "PASTA DE DESTINO", AutoSize = true, Font = new Font("Consolas", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(111, 117, 107), Location = new Point(0, 2) };
-        _destinationLabel.Text = _destination; _destinationLabel.AutoEllipsis = true; _destinationLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold); _destinationLabel.ForeColor = Color.FromArgb(24, 32, 24); _destinationLabel.Location = new Point(0, 25); _destinationLabel.Width = 460;
-        var chooseButton = new Button { Text = "Alterar", AutoSize = true, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(216, 243, 106), ForeColor = Color.FromArgb(24, 32, 24), Location = new Point(490, 18) };
+        _destinationLabel.Text = _destination; _destinationLabel.AutoEllipsis = true; _destinationLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold); _destinationLabel.ForeColor = Color.FromArgb(24, 32, 24); _destinationLabel.Location = new Point(0, 25); _destinationLabel.Width = 420;
+        var chooseButton = new Button { Text = "Pasta", Width = 68, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(216, 243, 106), ForeColor = Color.FromArgb(24, 32, 24), Location = new Point(435, 18) };
         chooseButton.Click += (_, _) => ChooseDestination();
         destinationPanel.Controls.Add(destinationTitle); destinationPanel.Controls.Add(_destinationLabel); destinationPanel.Controls.Add(chooseButton); root.Controls.Add(destinationPanel, 0, 3); root.SetColumnSpan(destinationPanel, 2);
 
