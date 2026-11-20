@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import {
-  addTransferProgressListener, cancelTransfer, pickTransferFiles, scanForWindowsDevices,
-  sendTransferFiles, startLocalHotspot, stopLocalHotspot, type DiscoveredWindowsDevice,
-  type HotspotSession, type PickedTransferFile, type TransferProgressEvent,
+  addReceiveProgressListener, addTransferProgressListener, cancelTransfer, pickTransferFiles, scanForWindowsDevices,
+  sendTransferFiles, startLocalHotspot, stopLocalHotspot, startReceiving, stopReceiving, type DiscoveredWindowsDevice,
+  type HotspotSession, type PickedTransferFile, type ReceiveSession, type ReceiveProgressEvent, type TransferProgressEvent,
 } from "@/modules/xtransfer-transport/src";
 
 const C = {
@@ -45,14 +45,18 @@ export default function HomeScreen() {
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<TransferProgressEvent | null>(null);
+  const [receiveSession, setReceiveSession] = useState<ReceiveSession | null>(null);
+  const [receiveBusy, setReceiveBusy] = useState(false);
+  const [receiveProgress, setReceiveProgress] = useState<ReceiveProgressEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const total = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
   const percent = progress && progress.totalBytes > 0 ? Math.min(100, Math.round(progress.sentBytes / progress.totalBytes * 100)) : 0;
 
   useEffect(() => {
-    const sub = addTransferProgressListener(setProgress);
-    return () => sub.remove();
+    const sendSub = addTransferProgressListener(setProgress);
+    const receiveSub = addReceiveProgressListener(setReceiveProgress);
+    return () => { sendSub.remove(); receiveSub.remove(); };
   }, []);
 
   const activate = useCallback(async (managed: boolean) => {
@@ -89,6 +93,23 @@ export default function HomeScreen() {
     finally { setScanning(false); }
   }, [hotspot]);
 
+  const enableReceiver = useCallback(async () => {
+    if (!hotspot) { setError("Ativa primeiro o hotspot do telefone."); return; }
+    setReceiveBusy(true); setError(null); setNotice(null);
+    try {
+      const session = await startReceiving();
+      setReceiveSession(session);
+      setNotice("Receção ativa. Abre o XTransfer Offline no Windows e escolhe este telefone.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível iniciar a receção."); }
+    finally { setReceiveBusy(false); }
+  }, [hotspot]);
+
+  const disableReceiver = useCallback(async () => {
+    setReceiveBusy(true); setError(null);
+    try { await stopReceiving(); setReceiveSession(null); setNotice("Receção encerrada."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Não foi possível parar a receção."); }
+    finally { setReceiveBusy(false); }
+  }, []);
   const chooseFiles = useCallback(async () => {
     setError(null); setNotice(null);
     try {
@@ -217,10 +238,21 @@ export default function HomeScreen() {
           busy={sending} disabled={!hotspot || !device || files.length === 0 || code.length !== 6 || sending} />
 
         <View style={s.receiveCard}>
-          <View style={s.receiveIcon}><MaterialIcons name="south" size={19} color={C.faint} /></View>
-          <View style={s.grow}><Text style={s.receiveTitle}>Receber ficheiros do PC</Text><Text style={s.receiveCopy}>A transferência Windows → Android está em integração nativa. Não será feita através do navegador.</Text></View>
-          <View style={s.soon}><Text style={s.soonText}>EM BREVE</Text></View>
+          <View style={s.receiveIcon}><MaterialIcons name="south" size={19} color={C.blue} /></View>
+          <View style={s.grow}>
+            <Text style={s.receiveTitle}>Receber ficheiros do PC</Text>
+            <Text style={s.receiveCopy}>Receção nativa TLS. Os ficheiros verificados são guardados em Transferências / XTransfer Offline.</Text>
+          </View>
         </View>
+        {receiveSession ? <View style={s.pairBox}>
+          <Text style={s.metaLabel}>CÓDIGO PARA O WINDOWS · EXPIRA EM 5 MINUTOS</Text>
+          <Text selectable style={s.codeInput}>{receiveSession.code}</Text>
+          <Text style={s.pairHint}>No Windows, seleciona este telefone e introduz o código acima. Porta local: {receiveSession.port}.</Text>
+          {receiveProgress ? <Text style={s.progressMeta}>{receiveProgress.message} · {bytes(receiveProgress.sentBytes)} / {bytes(receiveProgress.totalBytes)}</Text> : null}
+          <Pressable onPress={() => void disableReceiver()} disabled={receiveBusy} style={s.stopButton}>
+            <MaterialIcons name="power-settings-new" size={17} color={C.red} /><Text style={s.stopText}>Parar receção</Text>
+          </Pressable>
+        </View> : <Primary title={receiveBusy ? "A iniciar…" : "Ativar receção do Windows"} icon="south" onPress={() => void enableReceiver()} busy={receiveBusy} disabled={!hotspot || receiveBusy} />}
         {notice ? <View style={s.notice}><MaterialIcons name="info-outline" size={18} color={C.blue} /><Text style={s.noticeText}>{notice}</Text></View> : null}
         {error ? <View style={s.error}><MaterialIcons name="error-outline" size={18} color={C.red} /><Text style={s.errorText}>{error}</Text></View> : null}
         <View style={s.security}><MaterialIcons name="lock-outline" size={16} color={C.muted} /><Text style={s.securityText}>O envio Android → Windows usa TLS com validação da fingerprint e SHA-256 dos ficheiros. Os dados permanecem na rede local.</Text></View>
