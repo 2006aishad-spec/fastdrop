@@ -1,7 +1,9 @@
 export {
-  addTransferProgressListener, cancelTransfer, pickTransferFiles, scanForWindowsDevices,
-  sendTransferFiles, startLocalHotspot, stopLocalHotspot,
+  addReceiveProgressListener, addTransferProgressListener, cancelTransfer, pauseTransfer,
+  pickTransferFiles, scanForWindowsDevices, sendTransferFiles,
+  startLocalHotspot, stopLocalHotspot, startReceiving, stopReceiving,
 } from "./XTransferTransport";
 export type {
-  DiscoveredWindowsDevice, HotspotSession, PickedTransferFile, TransferProgressEvent, TransferResult,
+  DiscoveredWindowsDevice, HotspotSession, PickedTransferFile, ReceiveSession,
+  ReceiveProgressEvent, TransferProgressEvent, TransferResult,
 } from "./XTransferTransport";
