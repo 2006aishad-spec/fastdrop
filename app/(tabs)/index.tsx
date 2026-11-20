@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import {
-  addReceiveProgressListener, addTransferProgressListener, cancelTransfer, pickTransferFiles, scanForWindowsDevices,
+  addReceiveProgressListener, addTransferProgressListener, pauseTransfer, cancelTransfer, pickTransferFiles, scanForWindowsDevices,
   sendTransferFiles, startLocalHotspot, stopLocalHotspot, startReceiving, stopReceiving, type DiscoveredWindowsDevice,
   type HotspotSession, type PickedTransferFile, type ReceiveSession, type ReceiveProgressEvent, type TransferProgressEvent,
 } from "@/modules/xtransfer-transport/src";
@@ -42,6 +42,7 @@ export default function HomeScreen() {
   const [device, setDevice] = useState<DiscoveredWindowsDevice | null>(null);
   const [scanning, setScanning] = useState(false);
   const [files, setFiles] = useState<PickedTransferFile[]>([]);
+  const [activeTransferId, setActiveTransferId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<TransferProgressEvent | null>(null);
@@ -117,7 +118,10 @@ export default function HomeScreen() {
     setError(null); setNotice(null);
     try {
       const picked = await pickTransferFiles();
-      if (picked.length) setFiles(picked.map(file => ({ ...file, fileId: makeId() })));
+      if (picked.length) {
+        setFiles(picked.map(file => ({ ...file, fileId: makeId() })));
+        setActiveTransferId(null);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível escolher ficheiros."); }
   }, []);
 
@@ -125,18 +129,19 @@ export default function HomeScreen() {
     if (!device) { setError("Escolhe o computador de destino."); return; }
     if (code.trim().length !== 6) { setError("Introduz o código de seis caracteres mostrado no Windows."); return; }
     if (!files.length) { setError("Escolhe pelo menos um ficheiro."); return; }
-    const transferId = "transfer-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    const transferId = activeTransferId ?? ("transfer-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8));
+    setActiveTransferId(transferId);
     setSending(true); setError(null); setNotice(null); setProgress(null);
     try {
       const result = await sendTransferFiles(device, code.trim().toUpperCase(), files, transferId);
       if (result.status === "completed") {
         setNotice((result.fileCount ?? files.length) + " ficheiro(s) enviados e verificados no Windows.");
-        setFiles([]); setCode("");
+        setFiles([]); setCode(""); setActiveTransferId(null);
       } else if (result.status === "paused") setNotice("Transferência pausada. Os blocos confirmados estão disponíveis para retoma.");
-      else setNotice("Transferência cancelada.");
+      else { setNotice("Transferência cancelada."); setActiveTransferId(null); }
     } catch (e) { setError(e instanceof Error ? e.message : "A transferência não foi concluída."); }
     finally { setSending(false); }
-  }, [code, device, files]);
+  }, [activeTransferId, code, device, files]);
 
   return (
     <ScreenContainer containerClassName="bg-[#F2F2F7]" safeAreaClassName="bg-[#F2F2F7]" edges={["top", "left", "right"]}>
@@ -234,7 +239,10 @@ export default function HomeScreen() {
           </View><Text style={s.percent}>{percent}%</Text></View>
           <View style={s.track}><View style={[s.fill, { width: (percent + "%") as `${number}%` }]} /></View>
           <Text style={s.progressMeta}>{progress ? bytes(progress.sentBytes) + " de " + bytes(progress.totalBytes) : "A preparar ligação"}</Text>
-          <Pressable onPress={() => void cancelTransfer()} style={s.cancel}><Text style={s.cancelText}>Cancelar transferência</Text></Pressable>
+          <View style={s.transferActions}>
+            <Pressable onPress={() => void pauseTransfer()} disabled={!sending} style={s.pause}><Text style={s.pauseText}>Pausar</Text></Pressable>
+            <Pressable onPress={() => void cancelTransfer()} disabled={!sending} style={s.cancel}><Text style={s.cancelText}>Cancelar</Text></Pressable>
+          </View>
         </View> : null}
 
         <Primary title={sending ? "A enviar…" : "Enviar para o PC"} icon="arrow-upward" onPress={() => void send()}
@@ -336,6 +344,8 @@ const s = StyleSheet.create({
   track: { height: 7, borderRadius: 8, backgroundColor: "#E9E9EE", overflow: "hidden", marginTop: 15 },
   fill: { height: 7, borderRadius: 8, backgroundColor: C.blue },
   progressMeta: { color: C.muted, fontSize: 10, marginTop: 7 },
+  transferActions: { flexDirection: "row", alignItems: "center", gap: 18 },
+  pause: { alignSelf: "flex-start", marginTop: 12, paddingVertical: 5 }, pauseText: { color: C.blue, fontSize: 11, fontWeight: "700" },
   cancel: { alignSelf: "flex-start", marginTop: 12, paddingVertical: 5 }, cancelText: { color: C.red, fontSize: 11, fontWeight: "700" },
   receiveCard: { flexDirection: "row", alignItems: "center", backgroundColor: C.white, borderRadius: 17, padding: 13, marginTop: 3, borderWidth: 1, borderColor: C.line },
   receiveIcon: { width: 35, height: 35, borderRadius: 11, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", marginRight: 10 },
