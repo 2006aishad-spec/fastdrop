@@ -150,3 +150,18 @@
 - [ ] Implementar receção Windows → Android por transporte nativo seguro, sem navegador.
 - [ ] Implementar histórico persistente local com eventos reais.
 - [ ] Testar consumo de memória, firewall e estabilidade no ASUS VivoBook E410KA.
+
+## Fase 4.1 — desenho da receção Android e envio Windows
+
+- [ ] Implementar listener TCP/TLS nativo no Android, com chave/certificado persistente no Android Keystore e fingerprint anunciada na rede local.
+- [ ] Publicar anúncio FD/01 do Android por multicast enquanto a receção estiver ativa, sem HTTP e sem browser.
+- [ ] Implementar no Windows a descoberta de dispositivos Android e o modo cliente TCP/TLS.
+- [ ] Implementar seleção de ficheiros no Windows e envio por streaming/chunks de até 1 MiB.
+- [ ] Implementar no Android receção por SAF (seletor de pasta), escrita em streaming e validação SHA-256 antes de confirmar.
+- [ ] Aplicar emparelhamento temporário de utilização única e pinning da fingerprint nos dois sentidos.
+- [ ] Implementar retoma, pausa e cancelamento com estado persistente e offsets confirmados.
+- [ ] Acrescentar testes automatizados de protocolo, TLS, descoberta, chunks, integridade, nomes inválidos, interrupção e retoma.
+- [ ] Executar CI Android e Windows e só disponibilizar novos APK/EXE se ambos passarem.
+- [ ] Testar fisicamente Galaxy A16 ↔ ASUS VivoBook E410KA, incluindo hotspot Android e Wi-Fi local.
+
+**Decisão de arquitetura:** manter as duas aplicações nativas. O Android poderá atuar como host da rede e servidor FD/01; o Windows terá os dois papéis: servidor para receber envios Android e cliente para enviar ficheiros ao Android. A descoberta deve ser bidirecional. Nenhum fluxo usará navegador, página web, HTTP, cloud ou serviço externo.
