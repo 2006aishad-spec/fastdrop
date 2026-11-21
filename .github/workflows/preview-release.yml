@@ -1,0 +1,132 @@
+name: XTransfer Offline Preview Release
+
+on:
+  push:
+    branches:
+      - redesign/hotspot-local-host
+
+permissions:
+  contents: read
+
+jobs:
+  android-client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: TypeScript validation
+        run: pnpm check
+      - name: Lint
+        run: pnpm lint
+      - name: Generate Android project
+        run: pnpm exec expo prebuild --platform android --no-install
+      - name: Build Android debug APK
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xtransfer-offline-android-release
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-client:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore .NET dependencies
+        run: dotnet restore windows-client/FastDrop.Windows.csproj
+      - name: Build Windows client
+        run: dotnet build windows-client/FastDrop.Windows.csproj --configuration Release --no-restore
+      - name: Run protocol tests
+        run: dotnet run --project windows-client/tests/FastDrop.Protocol.Tests.csproj --configuration Release
+      - name: Publish portable executable
+        run: dotnet publish windows-client/FastDrop.Windows.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=None --output artifacts/win-x64
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: xtransfer-offline-windows-release
+          path: artifacts/win-x64/FastDrop.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs:
+      - android-client
+      - windows-client
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: xtransfer-offline-android-release
+          path: release-assets
+      - name: Rename Android APK
+        run: mv release-assets/app-debug.apk release-assets/XTransfer-Offline-Android-debug.apk
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: xtransfer-offline-windows-release
+          path: release-assets
+      - name: Rename Windows executable
+        shell: bash
+        run: mv release-assets/FastDrop.exe release-assets/XTransfer-Offline-Windows-x64.exe
+      - name: Publish GitHub Preview Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.3.0-preview
+          target_commitish: ${{ github.sha }}
+          name: XTransfer Offline 0.3.0 — Preview
+          body: |
+            ## XTransfer Offline 0.3.0 — Preview
+
+            Esta pré-versão reúne as aplicações nativas Android e Windows no mesmo lançamento.
+
+            ### Ficheiros
+            - **XTransfer-Offline-Android-debug.apk** — APK Android de depuração, para instalação e testes.
+            - **XTransfer-Offline-Windows-x64.exe** — executável Windows x64, autónomo.
+
+            ### Funcionalidades incluídas no código
+            - Transferência direta entre Android e Windows pela rede local, sem browser, cloud ou servidor externo.
+            - Hotspot Android e descoberta de dispositivos por multicast.
+            - Ligações TLS e emparelhamento por código temporário.
+            - Envio e receção nativos nos dois sentidos.
+            - Transferência por chunks, confirmação, pausa, retoma, cancelamento e verificação SHA-256.
+
+            ### Estado e limitações
+            - As validações automáticas de TypeScript, lint, compilação Android, compilação Windows e testes de protocolo são executadas antes da publicação.
+            - **Ainda não é uma versão estável.** A comunicação real, hotspot, descoberta multicast, firewall e transferências entre Samsung Galaxy A16 e ASUS VivoBook E410KA ainda precisam de validação física.
+            - O APK é uma build de debug, não uma versão assinada para distribuição de produção.
+            - O executável Windows não tem assinatura digital de editor.
+
+            Instala e testa apenas se aceitares estas limitações. Faz cópia dos ficheiros importantes antes dos testes.
+          prerelease: true
+          draft: false
+          files: |
+            release-assets/XTransfer-Offline-Android-debug.apk
+            release-assets/XTransfer-Offline-Windows-x64.exe
+          fail_on_unmatched_files: true
+          overwrite_files: true
